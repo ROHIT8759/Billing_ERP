@@ -7,6 +7,43 @@ datasource db {
   url       = env("DATABASE_URL")
 }
 
+enum AccountCategory {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum AccountType {
+  CASH
+  BANK
+  CUSTOMER
+  SUPPLIER
+  SALES
+  PURCHASE
+  EXPENSE
+  SALES_RETURN
+  PURCHASE_RETURN
+  EQUITY
+  GENERAL
+}
+
+enum VoucherType {
+  SALES
+  PURCHASE
+  RECEIPT
+  PAYMENT
+  CREDIT_NOTE
+  DEBIT_NOTE
+  OPENING
+}
+
+enum PaymentMode {
+  CASH
+  BANK
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -26,11 +63,17 @@ model Shop {
   state      String
   pincode    String
   createdAt  DateTime   @default(now())
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  products   Product[]
-  customers  Customer[]
-  invoices   Invoice[]
-  purchases  Purchase[]
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products       Product[]
+  customers      Customer[]
+  suppliers      Supplier[]
+  invoices       Invoice[]
+  purchases      Purchase[]
+  accounts       Account[]
+  journals       JournalEntry[]
+  godowns        Godown[]
+  batches        Batch[]
+  purchaseOrders PurchaseOrder[]
 }
 
 model Product {
@@ -40,9 +83,16 @@ model Product {
   category     String?
   price        Float
   stock        Int           @default(0)
-  createdAt    DateTime      @default(now())
-  shop         Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  invoiceItems InvoiceItem[]
+  hsnCode            String?       // HSN / SAC code for GST compliance
+  gstRate            Float         @default(18) // product-specific GST rate in %
+  reorderLevel       Int?          // trigger low-stock alert when stock <= this
+  barcode            String?       // EAN/Code128 barcode value
+  createdAt          DateTime      @default(now())
+  shop               Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  invoiceItems       InvoiceItem[]
+  batches            Batch[]
+  godownStock        GodownStock[]
+  purchaseOrderItems PurchaseOrderItem[]
 
   @@index([shopId])
 }
@@ -50,42 +100,70 @@ model Product {
 model Customer {
   id        String    @id @default(uuid())
   shopId    String
+  accountId String?   @unique
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  state     String?   // State for CGST/SGST vs IGST determination
+  createdAt DateTime  @default(now())
+  shop      Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  account   Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  invoices  Invoice[]
+
+  @@index([shopId])
+}
+
+model Supplier {
+  id        String    @id @default(uuid())
+  shopId    String
+  accountId String?   @unique
   name      String
   phone     String?
   email     String?
   address   String?
   createdAt DateTime  @default(now())
   shop      Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  invoices  Invoice[]
+  account   Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  purchases Purchase[]
 
   @@index([shopId])
 }
 
 model Invoice {
-  id          String        @id @default(uuid())
-  shopId      String
-  customerId  String
-  invoiceNo   String?
-  totalAmount Float
-  gstAmount   Float         @default(0)
-  status      String        @default("paid")
-  createdAt   DateTime      @default(now())
-  shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  customer    Customer      @relation(fields: [customerId], references: [id])
-  items       InvoiceItem[]
+  id             String        @id @default(uuid())
+  shopId         String
+  customerId     String
+  invoiceNo      String?
+  totalAmount    Float
+  subtotal       Float         @default(0)
+  discountAmount Float         @default(0)
+  discountType   String        @default("none") // "none" | "trade" | "cash" | "volume"
+  gstAmount      Float         @default(0)
+  cgstAmount     Float         @default(0)
+  sgstAmount     Float         @default(0)
+  igstAmount     Float         @default(0)
+  status         String        @default("paid")
+  createdAt      DateTime      @default(now())
+  shop           Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customer       Customer      @relation(fields: [customerId], references: [id])
+  items          InvoiceItem[]
 
   @@index([shopId])
   @@index([customerId])
 }
 
 model InvoiceItem {
-  id        String  @id @default(uuid())
-  invoiceId String
-  productId String
-  quantity  Int
-  price     Float
-  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id])
+  id          String  @id @default(uuid())
+  invoiceId   String
+  productId   String
+  quantity    Int
+  price       Float
+  discountPct Float   @default(0)  // trade discount %
+  hsnCode     String?              // snapshot of HSN at time of sale
+  taxRate     Float   @default(18) // GST rate at time of sale
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product     Product @relation(fields: [productId], references: [id])
 
   @@index([invoiceId])
 }
@@ -93,12 +171,15 @@ model InvoiceItem {
 model Purchase {
   id          String         @id @default(uuid())
   shopId      String
+  supplierId  String?
   vendorName  String
   totalAmount Float
   imageUrl    String?
   createdAt   DateTime       @default(now())
   shop        Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  supplier    Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   items       PurchaseItem[]
+  batches     Batch[]
 
   @@index([shopId])
 }
@@ -112,4 +193,133 @@ model PurchaseItem {
   purchase     Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   @@index([purchaseId])
+}
+
+model Account {
+  id             String          @id @default(uuid())
+  shopId         String
+  code           String
+  name           String
+  category       AccountCategory
+  type           AccountType     @default(GENERAL)
+  openingBalance Float           @default(0)
+  isSystem       Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  shop           Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customer       Customer?
+  supplier       Supplier?
+  journalLines   JournalLine[]
+
+  @@unique([shopId, code])
+  @@index([shopId, category])
+}
+
+model JournalEntry {
+  id          String        @id @default(uuid())
+  shopId      String
+  entryNo     String        @unique
+  voucherType VoucherType
+  entryDate   DateTime      @default(now())
+  reference   String?
+  narration   String?
+  sourceModel String?
+  sourceId    String?
+  createdAt   DateTime      @default(now())
+  shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  lines       JournalLine[]
+
+  @@index([shopId, voucherType, entryDate])
+  @@index([shopId, sourceModel, sourceId])
+}
+
+model JournalLine {
+  id             String       @id @default(uuid())
+  journalEntryId String
+  accountId      String
+  debit          Float        @default(0)
+  credit         Float        @default(0)
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([journalEntryId])
+  @@index([accountId])
+}
+
+// ─── Advanced Inventory ───────────────────────────────────────────────────────
+
+model Godown {
+  id        String        @id @default(uuid())
+  shopId    String
+  name      String
+  address   String?
+  isDefault Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  shop      Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  stock     GodownStock[]
+  batches   Batch[]
+
+  @@index([shopId])
+}
+
+model GodownStock {
+  id        String  @id @default(uuid())
+  godownId  String
+  productId String
+  quantity  Int     @default(0)
+  godown    Godown  @relation(fields: [godownId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([godownId, productId])
+  @@index([godownId])
+  @@index([productId])
+}
+
+model Batch {
+  id          String    @id @default(uuid())
+  shopId      String
+  productId   String
+  godownId    String?
+  purchaseId  String?
+  batchNumber String
+  mfgDate     DateTime?
+  expiryDate  DateTime?
+  quantity    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  shop        Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id])
+  godown      Godown?   @relation(fields: [godownId], references: [id])
+  purchase    Purchase? @relation(fields: [purchaseId], references: [id])
+
+  @@index([shopId])
+  @@index([productId])
+  @@index([expiryDate])
+}
+
+model PurchaseOrder {
+  id          String              @id @default(uuid())
+  shopId      String
+  poNumber    String?
+  vendorName  String              @default("")
+  status      String              @default("draft")
+  totalAmount Float               @default(0)
+  notes       String?
+  createdAt   DateTime            @default(now())
+  shop        Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items       PurchaseOrderItem[]
+
+  @@index([shopId])
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  productId       String?
+  productName     String
+  quantity        Int
+  price           Float         @default(0)
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product         Product?      @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
 }

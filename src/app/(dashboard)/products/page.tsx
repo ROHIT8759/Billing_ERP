@@ -15,6 +15,10 @@ type Product = {
   category: string | null
   price: number
   stock: number
+  hsnCode: string | null
+  gstRate: number
+  reorderLevel: number | null
+  barcode: string | null
   createdAt: string
 }
 
@@ -33,7 +37,11 @@ export default function ProductsPage() {
     name: '',
     category: '',
     price: '',
-    stock: '0'
+    stock: '0',
+    hsnCode: '',
+    gstRate: '18',
+    reorderLevel: '',
+    barcode: '',
   })
 
   const fetchProducts = async () => {
@@ -60,11 +68,13 @@ export default function ProductsPage() {
         name: product.name,
         category: product.category || '',
         price: product.price.toString(),
-        stock: product.stock.toString()
+        stock: product.stock.toString(),
+        hsnCode: product.hsnCode || '',
+        gstRate: product.gstRate?.toString() || '18'
       })
     } else {
       setEditingId(null)
-      setFormData({ name: '', category: '', price: '', stock: '0' })
+      setFormData({ name: '', category: '', price: '', stock: '0', hsnCode: '', gstRate: '18' })
     }
     setIsModalOpen(true)
   }
@@ -261,6 +271,24 @@ export default function ProductsPage() {
               value={formData.stock}
               onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
               required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="HSN / SAC Code"
+              value={formData.hsnCode}
+              onChange={(e) => setFormData({ ...formData, hsnCode: e.target.value })}
+              placeholder="e.g. 8471"
+            />
+            <Input
+              label="GST Rate (%)"
+              type="number"
+              min="0"
+              max="28"
+              step="1"
+              value={formData.gstRate}
+              onChange={(e) => setFormData({ ...formData, gstRate: e.target.value })}
+              placeholder="18"
             />
           </div>
           <div className="pt-4 flex justify-end gap-3">
