@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
-import { formatDate } from '@/lib/utils'
+import { formatDate, INDIA_STATES } from '@/lib/utils'
 import { Plus, Search, Edit2, Trash2, Users } from 'lucide-react'
 
 type Customer = {
@@ -15,6 +15,7 @@ type Customer = {
   phone: string | null
   email: string | null
   address: string | null
+  state: string | null
   createdAt: string
   _count: { invoices: number }
 }
@@ -34,7 +35,8 @@ export default function CustomersPage() {
     name: '',
     phone: '',
     email: '',
-    address: ''
+    address: '',
+    state: ''
   })
 
   const fetchCustomers = async () => {
@@ -61,11 +63,12 @@ export default function CustomersPage() {
         name: customer.name,
         phone: customer.phone || '',
         email: customer.email || '',
-        address: customer.address || ''
+        address: customer.address || '',
+        state: customer.state || ''
       })
     } else {
       setEditingId(null)
-      setFormData({ name: '', phone: '', email: '', address: '' })
+      setFormData({ name: '', phone: '', email: '', address: '', state: '' })
     }
     setIsModalOpen(true)
   }
@@ -253,6 +256,17 @@ export default function CustomersPage() {
             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
             placeholder="Enter full address"
           />
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">State (for GST)</label>
+            <select
+              value={formData.state}
+              onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+            >
+              <option value="">Select state…</option>
+              {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
           <div className="pt-4 flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} disabled={formLoading}>
               Cancel
