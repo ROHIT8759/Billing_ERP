@@ -113,21 +113,21 @@ export default function OutstandingReportPage() {
             </div>
             
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
+              <table className="w-full text-left text-[13px] whitespace-nowrap">
                 <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-semibold cursor-pointer select-none">
                   <tr>
-                    <th className="px-5 py-4">Party Name</th>
-                    <th className="px-5 py-4">Contact</th>
-                    <th className="px-5 py-4 text-center">Type</th>
-                    <th className="px-5 py-4 text-right">Pending Balance</th>
+                    <th className="px-3 py-2 border-r border-slate-200">Party Name</th>
+                    <th className="px-3 py-2 border-r border-slate-200">Contact</th>
+                    <th className="px-3 py-2 text-center border-r border-slate-200">Type</th>
+                    <th className="px-3 py-2 text-right">Pending Balance</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {currentData.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-4 font-medium text-slate-900">{row.partyName}</td>
-                      <td className="px-5 py-4 text-slate-500">{row.partyPhone || <span className="text-slate-300">N/A</span>}</td>
-                      <td className="px-5 py-4 text-center">
+                    <tr key={row.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                      <td className="px-3 py-2 font-semibold text-slate-900 border-r border-slate-100">{row.partyName}</td>
+                      <td className="px-3 py-2 text-slate-500 border-r border-slate-100">{row.partyPhone || <span className="text-slate-300">N/A</span>}</td>
+                      <td className="px-3 py-2 text-center border-r border-slate-100">
                         <Badge variant="default" className="bg-slate-100 text-slate-600">
                           {row.partyType === 'CUSTOMER' ? 'Customer' : 'Supplier'}
                         </Badge>
@@ -138,7 +138,7 @@ export default function OutstandingReportPage() {
                           <div className="text-[10px] text-slate-400 mt-1">Advance paid</div>
                         )}
                       </td>
-                      <td className="px-5 py-4 text-right font-bold text-slate-900">
+                      <td className="px-3 py-2 text-right font-bold text-slate-900">
                         {formatCurrency(Math.abs(row.netBalance))}
                       </td>
                     </tr>

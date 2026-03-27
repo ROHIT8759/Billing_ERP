@@ -66,6 +66,13 @@ export default function NewPurchasePage() {
     gridRefs.current = items.map((_, i) => gridRefs.current[i] || [null, null, null])
   }, [items.length])
 
+  const setGridRef = useCallback((row: number, col: number, el: HTMLElement | null) => {
+    if (!gridRefs.current[row]) {
+      gridRefs.current[row] = [null, null, null]
+    }
+    gridRefs.current[row][col] = el
+  }, [])
+
   // --- Keyboard navigation ---
   const NUM_COLS = 3 // product, qty, price
 
@@ -151,7 +158,7 @@ export default function NewPurchasePage() {
     setTimeout(() => focusCell(index, 1), 50)
   }
 
-  const handleItemChange = (index: number, field: keyof LineItem, val: any) => {
+  const handleItemChange = (index: number, field: keyof LineItem, val: string | number | undefined) => {
     const newItems = [...items]
     newItems[index] = { ...newItems[index], [field]: val }
     setItems(newItems)
@@ -192,8 +199,8 @@ export default function NewPurchasePage() {
       }
 
       router.push('/purchases')
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to record purchase')
       setLoading(false)
     }
   }
@@ -306,7 +313,7 @@ export default function NewPurchasePage() {
               
               <div className="col-span-6 border-r border-slate-200 relative">
                 <input
-                  ref={el => { gridRefs.current[idx][0] = el }}
+                  ref={el => setGridRef(idx, 0, el)}
                   value={item.productName}
                   onChange={(e) => handleProductNameChange(idx, e.target.value)}
                   onKeyDown={e => handleCellKeyDown(e, idx, 0)}
@@ -340,7 +347,7 @@ export default function NewPurchasePage() {
               
               <div className="col-span-2 border-r border-slate-200 bg-slate-50/30">
                 <input
-                  ref={el => { gridRefs.current[idx][1] = el }}
+                  ref={el => setGridRef(idx, 1, el)}
                   type="number"
                   min="1"
                   value={item.quantity || ''}
@@ -352,7 +359,7 @@ export default function NewPurchasePage() {
               
               <div className="col-span-2 border-r border-slate-200">
                 <input
-                  ref={el => { gridRefs.current[idx][2] = el }}
+                  ref={el => setGridRef(idx, 2, el)}
                   type="number"
                   min="0"
                   step="0.01"

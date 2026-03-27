@@ -49,32 +49,32 @@ export default function ExpiryReportPage() {
     }
 
     return (
-      <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
-        <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+      <div className="overflow-x-auto border border-slate-200 rounded-sm bg-white shadow-sm">
+        <table className="w-full text-left text-[13px] whitespace-nowrap">
+          <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-semibold">
             <tr>
-              <th className="px-5 py-3">Product</th>
-              <th className="px-5 py-3 text-right">Qty Left</th>
-              <th className="px-5 py-3 text-center">Batch #</th>
-              <th className="px-5 py-3 text-center">Godown</th>
-              <th className="px-5 py-3 text-right">Expiry Date</th>
-              <th className="px-5 py-3 text-right">Status</th>
+              <th className="px-3 py-2 border-r border-slate-200">Product</th>
+              <th className="px-3 py-2 text-right border-r border-slate-200">Qty Left</th>
+              <th className="px-3 py-2 text-center border-r border-slate-200">Batch #</th>
+              <th className="px-3 py-2 text-center border-r border-slate-200">Godown</th>
+              <th className="px-3 py-2 text-right border-r border-slate-200">Expiry Date</th>
+              <th className="px-3 py-2 text-right">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {items.map(item => (
-              <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-5 py-3">
-                  <div className="font-medium text-slate-900">{item.productName}</div>
-                  {item.category && <div className="text-xs text-slate-500 mt-0.5">{item.category}</div>}
+              <tr key={item.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <td className="px-3 py-2 border-r border-slate-100">
+                  <div className="font-semibold text-slate-900">{item.productName}</div>
+                  {item.category && <div className="text-[10px] text-slate-500 mt-0.5">{item.category}</div>}
                 </td>
-                <td className="px-5 py-3 text-right">
+                <td className="px-3 py-2 text-right border-r border-slate-100">
                   <Badge variant="default" className="bg-slate-100 text-slate-700">{item.quantity}</Badge>
                 </td>
-                <td className="px-5 py-3 text-center font-mono text-xs text-slate-500">{item.batchNumber}</td>
-                <td className="px-5 py-3 text-center text-slate-600">{item.godownName}</td>
-                <td className="px-5 py-3 text-right text-slate-700 font-medium">{formatDate(item.expiryDate)}</td>
-                <td className="px-5 py-3 text-right">
+                <td className="px-3 py-2 text-center font-mono text-[11px] text-slate-500 border-r border-slate-100">{item.batchNumber}</td>
+                <td className="px-3 py-2 text-center text-slate-600 border-r border-slate-100">{item.godownName}</td>
+                <td className="px-3 py-2 text-right text-slate-700 font-medium border-r border-slate-100">{formatDate(item.expiryDate)}</td>
+                <td className="px-3 py-2 text-right">
                   {item.isExpired ? (
                     <Badge variant="danger" className="text-red-700 bg-red-100 border border-red-200">Expired</Badge>
                   ) : (

@@ -96,25 +96,25 @@ export default function DayBookPage() {
 
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
+              <table className="w-full text-left text-[13px] whitespace-nowrap">
                 <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-semibold">
                   <tr>
-                    <th className="px-4 py-3">Voucher Details</th>
-                    <th className="px-4 py-3">Particulars (Accounts)</th>
-                    <th className="px-4 py-3 text-right">Debit (₹)</th>
-                    <th className="px-4 py-3 text-right">Credit (₹)</th>
+                    <th className="px-3 py-2 border-r border-slate-200">Voucher Details</th>
+                    <th className="px-3 py-2 border-r border-slate-200">Particulars (Accounts)</th>
+                    <th className="px-3 py-2 text-right border-r border-slate-200">Debit (₹)</th>
+                    <th className="px-3 py-2 text-right border-r border-slate-200">Credit (₹)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {entries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-4 align-top w-64 border-r border-slate-50/50">
+                    <tr key={entry.id} className="hover:bg-slate-50 border-b border-slate-100">
+                      <td className="px-3 py-2 align-top w-64 border-r border-slate-100">
                         <div className="font-semibold text-slate-900">{entry.voucherType.replace('_', ' ')}</div>
-                        <div className="text-slate-500 text-xs mt-1 font-mono">{entry.entryNo}</div>
-                        {entry.reference && <div className="text-slate-500 text-xs mt-1">Ref: {entry.reference}</div>}
-                        <div className="text-slate-400 text-[11px] mt-2">{new Date(entry.entryDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                        <div className="text-slate-500 text-[11px] mt-0.5 font-mono">{entry.entryNo}</div>
+                        {entry.reference && <div className="text-slate-500 text-[11px] mt-0.5">Ref: {entry.reference}</div>}
+                        <div className="text-slate-400 text-[10px] mt-1">{new Date(entry.entryDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                       </td>
-                      <td className="px-4 py-4 p-0">
+                      <td className="px-3 py-2 p-0 border-r border-slate-100">
                         {/* Nested Table for Lines */}
                         <div className="flex flex-col gap-1 w-full min-w-[250px]">
                           {entry.lines.map((line, i) => (
@@ -131,7 +131,7 @@ export default function DayBookPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-4 align-top text-right border-l border-slate-50/50">
+                      <td className="px-3 py-2 align-top text-right border-r border-slate-100">
                         <div className="flex flex-col gap-1">
                           {entry.lines.map((line) => (
                             <div key={line.id} className="h-5 flex items-center justify-end">
@@ -140,7 +140,7 @@ export default function DayBookPage() {
                           ))}
                         </div>
                       </td>
-                      <td className="px-4 py-4 align-top text-right">
+                      <td className="px-3 py-2 align-top text-right">
                         <div className="flex flex-col gap-1">
                           {entry.lines.map((line) => (
                             <div key={line.id} className="h-5 flex items-center justify-end">
