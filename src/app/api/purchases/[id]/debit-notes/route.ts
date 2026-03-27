@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AccountType, VoucherType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getApiUserAndShop } from '@/lib/api-auth'
 import {
@@ -9,6 +8,19 @@ import {
   postJournalEntry,
   recomputePurchasePaymentState,
 } from '@/lib/accounting'
+
+const AccountType = {
+  CASH: 'CASH', BANK: 'BANK', CUSTOMER: 'CUSTOMER', SUPPLIER: 'SUPPLIER', SALES: 'SALES',
+  PURCHASE: 'PURCHASE', EXPENSE: 'EXPENSE', STOCK_WRITE_OFF: 'STOCK_WRITE_OFF',
+  SALES_RETURN: 'SALES_RETURN', PURCHASE_RETURN: 'PURCHASE_RETURN', EQUITY: 'EQUITY', GENERAL: 'GENERAL'
+} as const
+type AccountType = typeof AccountType[keyof typeof AccountType]
+
+const VoucherType = {
+  SALES: 'SALES', PURCHASE: 'PURCHASE', RECEIPT: 'RECEIPT', PAYMENT: 'PAYMENT',
+  CREDIT_NOTE: 'CREDIT_NOTE', DEBIT_NOTE: 'DEBIT_NOTE', OPENING: 'OPENING'
+} as const
+type VoucherType = typeof VoucherType[keyof typeof VoucherType]
 
 type RouteContext = {
   params: Promise<{ id: string }>
@@ -60,7 +72,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'At least one return item is required' }, { status: 400 })
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const purchase = await tx.purchase.findUnique({
         where: { id, shopId: shop.id },
         include: {
@@ -96,10 +108,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
         }
 
         let purchaseItem = inputItem.purchaseItemId
-          ? purchase.items.find((item) => item.id === inputItem.purchaseItemId)
+          ? purchase.items.find((item: any) => item.id === inputItem.purchaseItemId)
           : null
 
-        let batch = null
+        let batch: any = null
         if (inputItem.batchId) {
           batch = await tx.batch.findUnique({
             where: { id: inputItem.batchId },
@@ -118,7 +130,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
           if (!purchaseItem) {
             purchaseItem =
-              purchase.items.find((item) => item.productName.toLowerCase() === batch.product.name.toLowerCase()) ||
+              purchase.items.find((item: any) => item.productName.toLowerCase() === batch.product.name.toLowerCase()) ||
               null
           }
         }
