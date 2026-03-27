@@ -29,7 +29,7 @@ const EMPTY_ITEM = (): LineItem => ({
 // Keyboard shortcuts hint
 const SHORTCUTS = [
   { key: 'Tab', action: 'Next field' },
-  { key: '↓ on last row', action: 'Add row' },
+  { key: 'â†“ on last row', action: 'Add row' },
   { key: 'F9', action: 'Generate Invoice' },
   { key: 'F2', action: 'Focus Customer' },
   { key: 'Del (empty row)', action: 'Remove row' },
@@ -64,7 +64,7 @@ export default function NewInvoicePage() {
       fetch('/api/products').then(r  => r.json()),
     ]).then(([custData, prodData]) => {
       setCustomers(custData)
-      setProducts(prodData.filter((p: Product) => p.stock > 0))
+      setProducts(prodData)
     }).catch(() => setError('Failed to load data'))
   }, [])
 
@@ -89,7 +89,7 @@ export default function NewInvoicePage() {
     if (e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey && colIdx === NUM_COLS - 1)) {
       e.preventDefault()
       if (rowIdx === items.length - 1) {
-        // Last row — add a new row and focus its first cell
+        // Last row â€” add a new row and focus its first cell
         setItems(prev => {
           const next = [...prev, EMPTY_ITEM()]
           // Focus after state update
@@ -121,7 +121,7 @@ export default function NewInvoicePage() {
     }
   }
 
-  // F2 → customer focus; F9 → submit
+  // F2 â†’ customer focus; F9 â†’ submit
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'F2') { e.preventDefault(); customerRef.current?.focus() }
@@ -158,7 +158,6 @@ export default function NewInvoicePage() {
 
     setSubstituteSuggestions(prev => ({ ...prev, [i]: [] }))
   }
-
   const updateItem = (i: number, field: keyof LineItem, value: any) => {
     setItems(prev => {
       const next = [...prev]
@@ -186,7 +185,7 @@ export default function NewInvoicePage() {
 
   // --- Totals ---
   const selectedCustomer = customers.find(c => c.id === customerId)
-  const shopStatePlaceholder = '' // We don't fetch shop state on client — resolved server-side
+  const shopStatePlaceholder = '' // We don't fetch shop state on client â€” resolved server-side
 
   // Per-row effective price after trade discount
   const rowEffectivePrice = (item: LineItem) => applyTradeDiscount(item.price, item.discountPct)
@@ -208,7 +207,7 @@ export default function NewInvoicePage() {
     sum + (item.price * item.quantity * item.discountPct / 100), 0)
 
   // Use the customer's state to determine CGST/SGST vs IGST
-  // If no customer state → assume IGST (inter-state by default)
+  // If no customer state â†’ assume IGST (inter-state by default)
   const sameState = !!(selectedCustomer?.state) // We don't know shop state here; show both options
   const blendedGSTRate = items.length > 0
     ? items.reduce((sum, item) => sum + item.taxRate, 0) / items.length
@@ -272,7 +271,7 @@ export default function NewInvoicePage() {
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-900">Create Invoice <span className="text-slate-400 font-normal text-base">/ POS</span></h1>
-          <p className="text-slate-500 text-sm">Keyboard-driven billing • F2=Customer • F9=Submit • Tab/↓=Navigate</p>
+          <p className="text-slate-500 text-sm">Keyboard-driven billing â€¢ F2=Customer â€¢ F9=Submit â€¢ Tab/â†“=Navigate</p>
         </div>
         <button
           onClick={() => setShowHints(h => !h)}
@@ -326,7 +325,7 @@ export default function NewInvoicePage() {
               />
               {selectedCustomer?.state && (
                 <p className="text-xs text-emerald-600 mt-1.5 flex items-center gap-1">
-                  <Info size={12} /> State: {selectedCustomer.state} — {sameState ? 'CGST + SGST will apply' : 'IGST will apply'}
+                  <Info size={12} /> State: {selectedCustomer.state} â€” {sameState ? 'CGST + SGST will apply' : 'IGST will apply'}
                 </p>
               )}
             </Card>
@@ -341,7 +340,7 @@ export default function NewInvoicePage() {
               {/* Table header */}
               <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider px-1 mb-2">
                 <div className="col-span-4">Product</div>
-                <div className="col-span-2">Price (₹)</div>
+                <div className="col-span-2">Price (â‚¹)</div>
                 <div className="col-span-1">Qty</div>
                 <div className="col-span-2">Disc %</div>
                 <div className="col-span-1 text-center">HSN</div>
@@ -355,7 +354,7 @@ export default function NewInvoicePage() {
                     key={rowIdx}
                     className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2.5 rounded-xl border border-slate-100 group"
                   >
-                    {/* Col 0 – Product Select */}
+                    {/* Col 0 â€“ Product Select */}
                     <div className="col-span-4 space-y-1.5">
                       <select
                         ref={el => {
@@ -368,9 +367,9 @@ export default function NewInvoicePage() {
                         className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                         required
                       >
-                        <option value="">Select product…</option>
+                        <option value="">Select productâ€¦</option>
                         {products.map(p => (
-                          <option key={p.id} value={p.id}>{p.name} ({p.stock > 0 ? � : 'Out of stock'})</option>
+                          <option key={p.id} value={p.id}>{p.name} ({p.stock > 0 ? x : 'Out of stock'})</option>
                         ))}
                       </select>
                       {item.productId && (products.find(p => p.id === item.productId)?.stock || 0) <= 0 && (
@@ -385,7 +384,7 @@ export default function NewInvoicePage() {
                                   onClick={() => void handleProductSelect(rowIdx, suggestion.id)}
                                   className="rounded-full border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
                                 >
-                                  {suggestion.name} (�{suggestion.stock})
+                                  {suggestion.name} (×{suggestion.stock})
                                 </button>
                               ))}
                             </div>
@@ -396,10 +395,10 @@ export default function NewInvoicePage() {
                       )}
                     </div>
 
-                    {/* Col 1 – Price */}
+                    {/* Col 1 â€“ Price */}
                     <div className="col-span-2">
                       <div className="relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">â‚¹</span>
                         <input
                           ref={el => { if (gridRefs.current[rowIdx]) gridRefs.current[rowIdx][1] = el }}
                           type="number" min="0" step="0.01"
@@ -411,7 +410,7 @@ export default function NewInvoicePage() {
                       </div>
                     </div>
 
-                    {/* Col 2 – Quantity */}
+                    {/* Col 2 â€“ Quantity */}
                     <div className="col-span-1">
                       <input
                         ref={el => { if (gridRefs.current[rowIdx]) gridRefs.current[rowIdx][2] = el }}
@@ -423,7 +422,7 @@ export default function NewInvoicePage() {
                       />
                     </div>
 
-                    {/* Col 3 – Trade Discount % */}
+                    {/* Col 3 â€“ Trade Discount % */}
                     <div className="col-span-2">
                       <div className="relative">
                         <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
@@ -445,7 +444,7 @@ export default function NewInvoicePage() {
                     {/* HSN code display */}
                     <div className="col-span-1 text-center">
                       <span className="text-xs text-slate-400 font-mono">
-                        {item.hsnCode || '—'}
+                        {item.hsnCode || 'â€”'}
                       </span>
                     </div>
 
@@ -479,7 +478,7 @@ export default function NewInvoicePage() {
               <Button type="button" variant="outline" onClick={addItem}
                 className="w-full mt-3 border-dashed border-2 bg-transparent hover:bg-slate-50 text-slate-500"
               >
-                <Plus size={15} /> Add Row <span className="text-slate-400 text-xs ml-1">(↓ from last row)</span>
+                <Plus size={15} /> Add Row <span className="text-slate-400 text-xs ml-1">(â†“ from last row)</span>
               </Button>
             </Card>
 
@@ -529,7 +528,7 @@ export default function NewInvoicePage() {
                     }}
                     value=""
                   >
-                    <option value="">Add product scheme…</option>
+                    <option value="">Add product schemeâ€¦</option>
                     {products.filter(p => !volSchemes.find(s => s.productId === p.id)).map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
