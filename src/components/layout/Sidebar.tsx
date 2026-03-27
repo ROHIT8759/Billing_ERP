@@ -23,7 +23,8 @@ import {
   Target,
   FileText,
   RotateCcw,
-  ArchiveRestore
+  ArchiveRestore,
+  AlertTriangle
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -135,6 +136,7 @@ export function Sidebar({ shopName }: SidebarProps) {
           {[
             { href: '/inventory/godowns', icon: Warehouse, label: 'Godowns' },
             { href: '/inventory/batches', icon: Layers, label: 'Batches & Expiry' },
+            { href: '/inventory/write-offs', icon: AlertTriangle, label: 'Wastage / Write-Off' },
             { href: '/inventory/purchase-orders', icon: ClipboardList, label: 'Purchase Orders' },
             { href: '/inventory/barcodes', icon: Barcode, label: 'Barcodes' },
           ].map(({ href, icon: Icon, label }) => {
@@ -198,3 +200,4 @@ export function Sidebar({ shopName }: SidebarProps) {
     </aside>
   )
 }
+

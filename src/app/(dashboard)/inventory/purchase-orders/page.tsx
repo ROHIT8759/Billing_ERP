@@ -65,19 +65,18 @@ export default function PurchaseOrdersPage() {
   }, [])
 
   const autoGenerateFromLowStock = async () => {
-    const res = await fetch('/api/inventory/low-stock')
-    if (!res.ok) return
-    const lowStock: Product[] = await res.json()
-    if (lowStock.length === 0) { alert('No products are below reorder level.'); return }
-    setEditingId(null)
-    setForm({ vendorName: '', notes: 'Auto-generated from low-stock alert', status: 'draft' })
-    setItems(lowStock.map((p) => ({
-      productId: p.id,
-      productName: p.name,
-      quantity: p.reorderLevel != null ? String((p.reorderLevel - p.stock) * 2) : '10',
-      price: String(p.price)
-    })))
-    setIsModalOpen(true)
+    const res = await fetch('/api/purchase-orders/auto-draft', { method: 'POST' })
+    const payload = await res.json()
+    if (!res.ok) {
+      alert(payload.error || 'Failed to auto-generate purchase orders')
+      return
+    }
+    if (!payload.createdCount) {
+      alert('No new draft purchase orders were needed.')
+      return
+    }
+    await fetchOrders()
+    alert(Created  draft purchase order.)
   }
 
   const openModal = (o?: PurchaseOrder) => {
@@ -165,7 +164,7 @@ export default function PurchaseOrdersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Purchase Orders</h1>
-          <p className="text-slate-500 text-sm">Create POs manually or auto-generate from low-stock alerts</p>
+          <p className="text-slate-500 text-sm">Create POs manually or trigger server-side low-stock drafting</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={autoGenerateFromLowStock}>
@@ -346,3 +345,4 @@ export default function PurchaseOrdersPage() {
     </div>
   )
 }
+
