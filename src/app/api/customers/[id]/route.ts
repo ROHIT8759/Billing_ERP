@@ -19,7 +19,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { name, phone, email, address, state } = body
+    const { name, phone, email, address, state, priceLevel } = body
 
     const customer = await prisma.$transaction(async (tx) => {
       const updated = await tx.customer.update({
@@ -30,6 +30,7 @@ export async function PUT(
           email: email || null,
           address: address || null,
           state: state || null,
+          priceLevel: priceLevel || undefined,
         }
       })
 

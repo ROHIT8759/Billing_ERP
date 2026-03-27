@@ -18,14 +18,14 @@ const invoicePaymentVoucherTypes: VoucherType[] = [VoucherType.RECEIPT, VoucherT
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user, shop } = await getApiUserAndShop()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     if (!shop) return NextResponse.json({ error: 'Shop not found' }, { status: 404 })
 
-    const { id } = params
+    const { id } = await context.params
     const allocations = await prisma.invoiceAllocation.findMany({
       where: {
         shopId: shop.id,
@@ -55,14 +55,14 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user, shop } = await getApiUserAndShop()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     if (!shop) return NextResponse.json({ error: 'Shop not found' }, { status: 404 })
 
-    const { id } = params
+    const { id } = await context.params
     const body = await request.json()
     const {
       amount,

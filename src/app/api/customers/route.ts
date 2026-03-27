@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     if (!shop) return NextResponse.json({ error: 'Shop not found' }, { status: 404 })
 
     const body = await request.json()
-    const { name, phone, email, address, state } = body
+    const { name, phone, email, address, state, priceLevel } = body
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
@@ -49,6 +49,7 @@ export async function POST(request: Request) {
           email: email || null,
           address: address || null,
           state: state || null,
+          priceLevel: priceLevel || 'RETAIL',
         }
       })
 

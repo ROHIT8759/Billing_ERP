@@ -10,10 +10,14 @@ import {
   recomputeInvoicePaymentState,
 } from '@/lib/accounting'
 import { getApiUserAndShop } from '@/lib/api-auth'
+import { ensureDraftPurchaseOrdersForLowStock } from '@/lib/inventory'
 
 type InvoiceCreateItemInput = {
   productId: string
   quantity: number | string
+  billedQty?: number | string
+  freeQty?: number | string
+  schemeId?: string | null
   price: number | string
   discountPct?: number | string
   hsnCode?: string | null
@@ -34,7 +38,7 @@ export async function GET() {
       include: {
         customer: true,
         items: true,
-      }
+      },
     })
 
     return NextResponse.json(invoices)
@@ -105,19 +109,29 @@ export async function POST(request: Request) {
       computedDueDate.setDate(computedDueDate.getDate() + paymentTermDaysValue)
     }
 
-    // Generate Invoice Number (Format: INV-YYYYMMDD-XXXX)
+    const normalizedItems = (items as InvoiceCreateItemInput[]).map((item) => ({
+      ...item,
+      quantity: Number(item.quantity),
+      price: Number(item.price),
+      discountPct: Number(item.discountPct || 0),
+      taxRate: Number(item.taxRate || 18),
+    }))
+
+    if (normalizedItems.some((item) => !item.productId || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+      return NextResponse.json({ error: 'Each line item requires a valid product and quantity' }, { status: 400 })
+    }
+
     const dateStr = `${createdDate.getFullYear()}${(createdDate.getMonth() + 1).toString().padStart(2, '0')}${createdDate.getDate().toString().padStart(2, '0')}`
     const startOfDay = new Date(createdDate)
     startOfDay.setHours(0, 0, 0, 0)
     const count = await prisma.invoice.count({
       where: {
         shopId: shop.id,
-        createdAt: { gte: startOfDay }
-      }
+        createdAt: { gte: startOfDay },
+      },
     })
     const invoiceNo = `INV-${dateStr}-${(count + 1).toString().padStart(4, '0')}`
 
-    // Use a transaction to create invoice, add items, and decrement stock
     const invoice = await prisma.$transaction(async (tx) => {
       const customer = await tx.customer.findUnique({
         where: { id: customerId },
@@ -126,6 +140,29 @@ export async function POST(request: Request) {
 
       if (!customer || customer.shopId !== shop.id) {
         throw new Error('Customer not found')
+      }
+
+      const stockProducts = await tx.product.findMany({
+        where: {
+          shopId: shop.id,
+          id: { in: normalizedItems.map((item) => item.productId) },
+        },
+        select: {
+          id: true,
+          name: true,
+          stock: true,
+        },
+      })
+
+      const stockMap = new Map(stockProducts.map((product) => [product.id, product]))
+      for (const item of normalizedItems) {
+        const product = stockMap.get(item.productId)
+        if (!product) {
+          throw new Error('One or more products were not found')
+        }
+        if (product.stock < item.quantity) {
+          throw new Error(`Insufficient stock for ${product.name}`)
+        }
       }
 
       const salesAccount = await getSystemAccount(tx, shop.id, AccountType.SALES)
@@ -156,31 +193,32 @@ export async function POST(request: Request) {
           paymentStatus: 'UNPAID',
           status: 'paid',
           items: {
-            create: items.map((item: InvoiceCreateItemInput) => ({
+            create: normalizedItems.map((item) => ({
               productId: item.productId,
-              quantity: Number(item.quantity),
-              price: Number(item.price),
-              discountPct: Number(item.discountPct || 0),
+              quantity: item.quantity,
+              price: item.price,
+              discountPct: item.discountPct,
               hsnCode: item.hsnCode || null,
-              taxRate: Number(item.taxRate || 18),
-            }))
-          }
+              taxRate: item.taxRate,
+            })),
+          },
         },
         include: {
           customer: true,
-          items: true
-        }
+          items: true,
+        },
       })
 
-      // Decrement product stock
-      for (const item of items) {
+      for (const item of normalizedItems) {
         await tx.product.update({
           where: { id: item.productId },
           data: {
-            stock: { decrement: parseInt(item.quantity, 10) }
-          }
+            stock: { decrement: item.quantity },
+          },
         })
       }
+
+      await ensureDraftPurchaseOrdersForLowStock(tx, shop.id, normalizedItems.map((item) => item.productId))
 
       const refreshedCustomerAccount = await ensureCustomerAccount(
         tx,
@@ -252,7 +290,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(invoice)
   } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal server error'
+    const status = message.includes('Insufficient stock') || message.includes('not found') ? 400 : 500
     console.error('Invoice creation error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: message }, { status })
   }
 }

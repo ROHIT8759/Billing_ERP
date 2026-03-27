@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       const effectiveEntryDate = entryDate ? new Date(entryDate) : new Date()
       const writeOffAccount = await getSystemAccount(tx, shop.id, AccountType.STOCK_WRITE_OFF)
+      const inventoryAccount = await getSystemAccount(tx, shop.id, AccountType.INVENTORY)
       const preparedItems = []
       let totalAmount = 0
 
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
         sourceModel: 'StockWriteOff',
         lines: [
           { accountId: writeOffAccount.id, debit: totalAmount },
-          { accountId: writeOffAccount.id, credit: 0 },
+          { accountId: inventoryAccount.id, credit: totalAmount },
         ],
       })
 
@@ -186,4 +187,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
   }
 }
+
+
 
