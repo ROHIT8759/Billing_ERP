@@ -44,6 +44,19 @@ enum PaymentMode {
   BANK
 }
 
+enum DocumentPaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum AllocationDocumentType {
+  INVOICE
+  PURCHASE
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -76,6 +89,8 @@ model Shop {
   godowns        Godown[]
   batches        Batch[]
   purchaseOrders PurchaseOrder[]
+  invoiceAllocations InvoiceAllocation[]
+  purchaseAllocations PurchaseAllocation[]
 }
 
 model Product {

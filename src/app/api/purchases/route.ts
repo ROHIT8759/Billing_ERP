@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { AccountType, VoucherType } from '@prisma/client'
 import {
+  createPurchaseAllocation,
   ensureAccountingSetup,
   ensureSupplierAccount,
   findOrCreateSupplier,
   getSystemAccount,
   postJournalEntry,
+  recomputePurchasePaymentState,
 } from '@/lib/accounting'
 import { getApiUserAndShop } from '@/lib/api-auth'
 
@@ -42,13 +44,59 @@ export async function POST(request: Request) {
     await ensureAccountingSetup(shop.id)
 
     const body = await request.json()
-    const { supplierId, vendorName, items, totalAmount, imageUrl } = body
+    const {
+      supplierId,
+      vendorName,
+      items,
+      totalAmount,
+      imageUrl,
+      billNo,
+      dueDate,
+      paymentTermDays,
+      initialPaymentAmount,
+      paymentMode,
+    } = body
 
     if ((!supplierId && !vendorName) || !items || items.length === 0) {
       return NextResponse.json(
         { error: 'Supplier or vendor name and at least one item are required' },
         { status: 400 }
       )
+    }
+
+    const createdDate = new Date()
+    const totalAmountValue = Number.parseFloat(totalAmount)
+    const initialPaymentAmountValue = Number.parseFloat(initialPaymentAmount || 0)
+    const paymentTermDaysValue = Number.parseInt(paymentTermDays, 10)
+
+    if (!Number.isFinite(totalAmountValue) || totalAmountValue <= 0) {
+      return NextResponse.json({ error: 'A valid total amount is required' }, { status: 400 })
+    }
+
+    if (!Number.isFinite(initialPaymentAmountValue) || initialPaymentAmountValue < 0) {
+      return NextResponse.json(
+        { error: 'Initial payment amount must be zero or greater' },
+        { status: 400 }
+      )
+    }
+
+    if (initialPaymentAmountValue > totalAmountValue) {
+      return NextResponse.json(
+        { error: 'Initial payment amount cannot exceed total amount' },
+        { status: 400 }
+      )
+    }
+
+    let computedDueDate: Date | null = null
+    if (dueDate) {
+      const parsedDueDate = new Date(dueDate)
+      if (Number.isNaN(parsedDueDate.getTime())) {
+        return NextResponse.json({ error: 'Invalid due date' }, { status: 400 })
+      }
+      computedDueDate = parsedDueDate
+    } else if (Number.isFinite(paymentTermDaysValue) && paymentTermDaysValue > 0) {
+      computedDueDate = new Date(createdDate)
+      computedDueDate.setDate(computedDueDate.getDate() + paymentTermDaysValue)
     }
 
     // Use transaction to create purchase, items, and increment stock
@@ -74,6 +122,13 @@ export async function POST(request: Request) {
       }
 
       const purchaseAccount = await getSystemAccount(tx, shop.id, AccountType.PURCHASE)
+      const cashOrBankAccount = initialPaymentAmountValue > 0
+        ? await getSystemAccount(
+            tx,
+            shop.id,
+            paymentMode === 'BANK' ? AccountType.BANK : AccountType.CASH
+          )
+        : null
       const normalizedVendorName = supplier.name
 
       // 1. Create Purchase
@@ -81,8 +136,13 @@ export async function POST(request: Request) {
         data: {
           shopId: shop.id,
           supplierId: supplier.id,
+          billNo: billNo?.trim() || null,
           vendorName: normalizedVendorName,
-          totalAmount: parseFloat(totalAmount),
+          totalAmount: totalAmountValue,
+          dueDate: computedDueDate,
+          paidAmount: 0,
+          outstandingAmount: totalAmountValue,
+          paymentStatus: 'UNPAID',
           imageUrl: imageUrl || null,
           items: {
             create: items.map((item: any) => ({
@@ -117,7 +177,7 @@ export async function POST(request: Request) {
         shopId: shop.id,
         voucherType: VoucherType.PURCHASE,
         entryDate: newPurchase.createdAt,
-        reference: supplier.name,
+        reference: billNo?.trim() || supplier.name,
         narration: `Purchase from ${supplier.name}`,
         sourceModel: 'Purchase',
         sourceId: newPurchase.id,
@@ -133,7 +193,45 @@ export async function POST(request: Request) {
         ],
       })
 
-      return newPurchase
+      if (initialPaymentAmountValue > 0 && cashOrBankAccount) {
+        const paymentEntry = await postJournalEntry(tx, {
+          shopId: shop.id,
+          voucherType: VoucherType.PAYMENT,
+          entryDate: newPurchase.createdAt,
+          reference: billNo?.trim() || supplier.name,
+          narration: `Payment against purchase ${billNo?.trim() || newPurchase.id} to ${supplier.name}`,
+          sourceModel: 'Purchase',
+          sourceId: newPurchase.id,
+          lines: [
+            {
+              accountId: supplierAccount.id,
+              debit: initialPaymentAmountValue,
+            },
+            {
+              accountId: cashOrBankAccount.id,
+              credit: initialPaymentAmountValue,
+            },
+          ],
+        })
+
+        await createPurchaseAllocation(tx, {
+          shopId: shop.id,
+          purchaseId: newPurchase.id,
+          journalEntryId: paymentEntry.id,
+          amount: initialPaymentAmountValue,
+          allocatedAt: newPurchase.createdAt,
+        })
+
+        await recomputePurchasePaymentState(tx, newPurchase.id)
+      }
+
+      return tx.purchase.findUniqueOrThrow({
+        where: { id: newPurchase.id },
+        include: {
+          supplier: true,
+          items: true,
+        },
+      })
     })
 
     return NextResponse.json(purchase)

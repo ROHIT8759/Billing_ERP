@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
+  assertAllocationAmountValid,
+  createInvoiceAllocation,
+  createPurchaseAllocation,
   ensureAccountingSetup,
   ensureCustomerAccount,
   ensureSupplierAccount,
   getSystemAccount,
   postJournalEntry,
+  recomputeInvoicePaymentState,
+  recomputePurchasePaymentState,
 } from '@/lib/accounting'
 import { getApiUserAndShop } from '@/lib/api-auth'
 
-// Local enums (these are not in Prisma schema — managed as plain strings in Prisma)
+// Local enums (these are not in Prisma schema - managed as plain strings in Prisma)
 const VoucherType = {
   RECEIPT: 'RECEIPT',
   PAYMENT: 'PAYMENT',
@@ -30,12 +36,104 @@ const AccountType = {
 } as const
 type AccountType = typeof AccountType[keyof typeof AccountType]
 
-async function getCashOrBankAccount(shopId: string, paymentMode: PaymentMode) {
-  return getSystemAccount(
-    prisma,
-    shopId,
-    paymentMode === PaymentMode.BANK ? AccountType.BANK : AccountType.CASH
-  )
+type Tx = Prisma.TransactionClient
+
+type AllocationInput = {
+  documentType: string
+  documentId: string
+  amount: number | string
+}
+
+function normalizeDocumentType(documentType: string) {
+  const normalized = documentType.trim().toUpperCase()
+
+  if (normalized === 'INVOICE') {
+    return 'INVOICE' as const
+  }
+
+  if (normalized === 'PURCHASE') {
+    return 'PURCHASE' as const
+  }
+
+  throw new Error(`Unsupported allocation document type: ${documentType}`)
+}
+
+async function applyAllocations(
+  tx: Tx,
+  shopId: string,
+  journalEntryId: string,
+  allocatedAt: Date,
+  allocations: AllocationInput[] | undefined
+) {
+  if (!allocations?.length) {
+    return
+  }
+
+  for (const allocation of allocations) {
+    if (!allocation.documentId) {
+      throw new Error('Allocation document id is required')
+    }
+
+    const documentType = normalizeDocumentType(allocation.documentType)
+    const allocationAmount = Number(allocation.amount || 0)
+
+    if (documentType === 'INVOICE') {
+      const invoice = await tx.invoice.findFirst({
+        where: {
+          id: allocation.documentId,
+          shopId,
+        },
+        select: {
+          id: true,
+          outstandingAmount: true,
+        },
+      })
+
+      if (!invoice) {
+        throw new Error('Invoice not found')
+      }
+
+      assertAllocationAmountValid(allocationAmount, invoice.outstandingAmount)
+
+      await createInvoiceAllocation(tx, {
+        shopId,
+        invoiceId: invoice.id,
+        journalEntryId,
+        amount: allocationAmount,
+        allocatedAt,
+      })
+
+      await recomputeInvoicePaymentState(tx, invoice.id)
+      continue
+    }
+
+    const purchase = await tx.purchase.findFirst({
+      where: {
+        id: allocation.documentId,
+        shopId,
+      },
+      select: {
+        id: true,
+        outstandingAmount: true,
+      },
+    })
+
+    if (!purchase) {
+      throw new Error('Purchase not found')
+    }
+
+    assertAllocationAmountValid(allocationAmount, purchase.outstandingAmount)
+
+    await createPurchaseAllocation(tx, {
+      shopId,
+      purchaseId: purchase.id,
+      journalEntryId,
+      amount: allocationAmount,
+      allocatedAt,
+    })
+
+    await recomputePurchasePaymentState(tx, purchase.id)
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -92,6 +190,7 @@ export async function POST(request: Request) {
       reference,
       narration,
       entryDate,
+      allocations,
     } = body
 
     const numericAmount = Number(amount || 0)
@@ -125,7 +224,7 @@ export async function POST(request: Request) {
 
         const customerAccount = await ensureCustomerAccount(tx, shop.id, customer.id, customer.name)
 
-        return postJournalEntry(tx, {
+        const journalEntry = await postJournalEntry(tx, {
           shopId: shop.id,
           voucherType: VoucherType.RECEIPT,
           entryDate: entryDate ? new Date(entryDate) : new Date(),
@@ -136,6 +235,10 @@ export async function POST(request: Request) {
             { accountId: customerAccount.id, credit: numericAmount },
           ],
         })
+
+        await applyAllocations(tx, shop.id, journalEntry.id, journalEntry.entryDate, allocations)
+
+        return journalEntry
       }
 
       if (voucherType === VoucherType.PAYMENT) {
@@ -155,7 +258,7 @@ export async function POST(request: Request) {
 
           const supplierAccount = await ensureSupplierAccount(tx, shop.id, supplier.id, supplier.name)
 
-          return postJournalEntry(tx, {
+          const journalEntry = await postJournalEntry(tx, {
             shopId: shop.id,
             voucherType: VoucherType.PAYMENT,
             entryDate: entryDate ? new Date(entryDate) : new Date(),
@@ -166,6 +269,10 @@ export async function POST(request: Request) {
               { accountId: cashOrBank.id, credit: numericAmount },
             ],
           })
+
+          await applyAllocations(tx, shop.id, journalEntry.id, journalEntry.entryDate, allocations)
+
+          return journalEntry
         }
 
         const expenseAccount = await tx.account.findFirst({
@@ -179,7 +286,7 @@ export async function POST(request: Request) {
           throw new Error('Expense account not found')
         }
 
-        return postJournalEntry(tx, {
+        const journalEntry = await postJournalEntry(tx, {
           shopId: shop.id,
           voucherType: VoucherType.PAYMENT,
           entryDate: entryDate ? new Date(entryDate) : new Date(),
@@ -190,6 +297,10 @@ export async function POST(request: Request) {
             { accountId: cashOrBank.id, credit: numericAmount },
           ],
         })
+
+        await applyAllocations(tx, shop.id, journalEntry.id, journalEntry.entryDate, allocations)
+
+        return journalEntry
       }
 
       if (voucherType === VoucherType.CREDIT_NOTE) {
@@ -209,7 +320,7 @@ export async function POST(request: Request) {
         const customerAccount = await ensureCustomerAccount(tx, shop.id, customer.id, customer.name)
         const salesReturnAccount = await getSystemAccount(tx, shop.id, AccountType.SALES_RETURN)
 
-        return postJournalEntry(tx, {
+        const journalEntry = await postJournalEntry(tx, {
           shopId: shop.id,
           voucherType: VoucherType.CREDIT_NOTE,
           entryDate: entryDate ? new Date(entryDate) : new Date(),
@@ -220,6 +331,10 @@ export async function POST(request: Request) {
             { accountId: customerAccount.id, credit: numericAmount },
           ],
         })
+
+        await applyAllocations(tx, shop.id, journalEntry.id, journalEntry.entryDate, allocations)
+
+        return journalEntry
       }
 
       if (voucherType === VoucherType.DEBIT_NOTE) {
@@ -239,7 +354,7 @@ export async function POST(request: Request) {
         const supplierAccount = await ensureSupplierAccount(tx, shop.id, supplier.id, supplier.name)
         const purchaseReturnAccount = await getSystemAccount(tx, shop.id, AccountType.PURCHASE_RETURN)
 
-        return postJournalEntry(tx, {
+        const journalEntry = await postJournalEntry(tx, {
           shopId: shop.id,
           voucherType: VoucherType.DEBIT_NOTE,
           entryDate: entryDate ? new Date(entryDate) : new Date(),
@@ -250,16 +365,20 @@ export async function POST(request: Request) {
             { accountId: purchaseReturnAccount.id, credit: numericAmount },
           ],
         })
+
+        await applyAllocations(tx, shop.id, journalEntry.id, journalEntry.entryDate, allocations)
+
+        return journalEntry
       }
 
       throw new Error('Unsupported voucher type')
     })
 
     return NextResponse.json(entry)
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Transaction posting error:', error)
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
     )
   }

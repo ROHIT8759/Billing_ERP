@@ -15,7 +15,26 @@ export async function GET(
 
     const invoice = await prisma.invoice.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        shopId: true,
+        customerId: true,
+        invoiceNo: true,
+        totalAmount: true,
+        paidAmount: true,
+        outstandingAmount: true,
+        paymentStatus: true,
+        dueDate: true,
+        lastPaymentAt: true,
+        subtotal: true,
+        discountAmount: true,
+        discountType: true,
+        gstAmount: true,
+        cgstAmount: true,
+        sgstAmount: true,
+        igstAmount: true,
+        status: true,
+        createdAt: true,
         customer: true,
         items: {
           include: {

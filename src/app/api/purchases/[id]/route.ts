@@ -3,6 +3,47 @@ import { prisma } from '@/lib/prisma'
 import { deleteJournalEntriesForSource } from '@/lib/accounting'
 import { getApiUserAndShop } from '@/lib/api-auth'
 
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const { user, shop } = await getApiUserAndShop()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!shop) return NextResponse.json({ error: 'Shop not found' }, { status: 404 })
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        shopId: true,
+        supplierId: true,
+        billNo: true,
+        vendorName: true,
+        totalAmount: true,
+        paidAmount: true,
+        outstandingAmount: true,
+        paymentStatus: true,
+        dueDate: true,
+        lastPaymentAt: true,
+        imageUrl: true,
+        createdAt: true,
+        supplier: true,
+        items: true,
+      }
+    })
+
+    if (!purchase || purchase.shopId !== shop.id) {
+      return NextResponse.json({ error: 'Purchase not found' }, { status: 404 })
+    }
+
+    return NextResponse.json(purchase)
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
