@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, Search, Trash2, Truck, ScanLine } from 'lucide-react'
+import { Plus, Search, Trash2, Truck, ScanLine, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
 type Purchase = {
@@ -12,7 +12,11 @@ type Purchase = {
   vendorName: string
   totalAmount: number
   createdAt: string
-  items: any[]
+  items: Array<{ id: string }>
+  supplier: {
+    id: string
+    name: string
+  } | null
 }
 
 export default function PurchasesPage() {
@@ -61,6 +65,12 @@ export default function PurchasesPage() {
           <p className="text-slate-500 text-sm">Manage vendor bills and stock inwards</p>
         </div>
         <div className="flex gap-3">
+          <Link href="/suppliers" className="w-full sm:w-auto">
+            <Button variant="outline" className="w-full sm:w-auto">
+              <Building2 size={18} />
+              Suppliers
+            </Button>
+          </Link>
           <Link href="/purchases/scan" className="w-full sm:w-auto">
             <Button variant="outline" className="w-full sm:w-auto text-amber-600 border-amber-200 hover:bg-amber-50">
               <ScanLine size={18} />

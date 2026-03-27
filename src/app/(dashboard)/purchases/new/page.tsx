@@ -1,25 +1,47 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { formatCurrency } from '@/lib/utils'
-import { Plus, Trash2, ArrowLeft, Truck } from 'lucide-react'
+import { Plus, Trash2, ArrowLeft, Truck, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
 type LineItem = { productName: string; quantity: number; price: number }
+type Supplier = {
+  id: string
+  name: string
+  outstandingBalance: number
+}
 
 export default function NewPurchasePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   
+  const [supplierId, setSupplierId] = useState('')
   const [vendorName, setVendorName] = useState('')
   const [items, setItems] = useState<LineItem[]>([
     { productName: '', quantity: 1, price: 0 }
   ])
+
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        const res = await fetch('/api/suppliers')
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to fetch suppliers')
+        setSuppliers(data.suppliers || [])
+      } catch {
+        setSuppliers([])
+      }
+    }
+
+    fetchSuppliers()
+  }, [])
 
   const handleItemChange = (index: number, field: keyof LineItem, value: any) => {
     const newItems = [...items]
@@ -55,6 +77,7 @@ export default function NewPurchasePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          supplierId: supplierId || null,
           vendorName,
           items,
           totalAmount
@@ -102,14 +125,51 @@ export default function NewPurchasePage() {
                 <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xs">1</span>
                 Vendor Details
               </h3>
+
+              <div className="mb-4">
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Choose Existing Supplier</label>
+                <div className="relative">
+                  <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <select
+                    value={supplierId}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setSupplierId(value)
+                      const selectedSupplier = suppliers.find((supplier) => supplier.id === value)
+                      if (selectedSupplier) {
+                        setVendorName(selectedSupplier.name)
+                      }
+                    }}
+                    className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  >
+                    <option value="">Create or type a new vendor</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name} ({formatCurrency(supplier.outstandingBalance)} due)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               
               <Input
                 label="Vendor Name *"
                 value={vendorName}
-                onChange={(e) => setVendorName(e.target.value)}
+                onChange={(e) => {
+                  setVendorName(e.target.value)
+                  if (supplierId) {
+                    const selectedSupplier = suppliers.find((supplier) => supplier.id === supplierId)
+                    if (selectedSupplier?.name !== e.target.value) {
+                      setSupplierId('')
+                    }
+                  }
+                }}
                 placeholder="e.g. Samsung Distributors"
                 required
               />
+              <p className="mt-2 text-xs text-slate-500">
+                Select an existing supplier to reuse contact and balance history, or type a new vendor name to create one automatically.
+              </p>
             </Card>
 
             <Card className="p-6">
