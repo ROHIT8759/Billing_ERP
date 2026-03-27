@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ensureAccountingSetup, ensureCustomerAccount } from '@/lib/accounting'
+import { ensureAccountingSetup, ensureSupplierAccount } from '@/lib/accounting'
 import { getApiUserAndShop } from '@/lib/api-auth'
 
 export async function GET() {
@@ -11,18 +11,22 @@ export async function GET() {
 
     await ensureAccountingSetup(shop.id)
 
-    const customers = await prisma.customer.findMany({
+    const suppliers = await prisma.supplier.findMany({
       where: { shopId: shop.id },
       orderBy: { createdAt: 'desc' },
       include: {
-        _count: {
-          select: { invoices: true }
-        }
-      }
+        account: true,
+        purchases: {
+          select: {
+            id: true,
+          },
+        },
+      },
     })
 
-    return NextResponse.json(customers)
-  } catch (error: any) {
+    return NextResponse.json(suppliers)
+  } catch (error) {
+    console.error('Suppliers fetch error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -34,34 +38,34 @@ export async function POST(request: Request) {
     if (!shop) return NextResponse.json({ error: 'Shop not found' }, { status: 404 })
 
     const body = await request.json()
-    const { name, phone, email, address, state } = body
+    const { name, phone, email, address } = body
 
     if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Supplier name is required' }, { status: 400 })
     }
 
-    const customer = await prisma.$transaction(async (tx) => {
-      const newCustomer = await tx.customer.create({
+    const supplier = await prisma.$transaction(async (tx) => {
+      const newSupplier = await tx.supplier.create({
         data: {
           shopId: shop.id,
           name,
           phone: phone || null,
           email: email || null,
           address: address || null,
-          state: state || null,
-        }
+        },
       })
 
-      await ensureCustomerAccount(tx, shop.id, newCustomer.id, newCustomer.name)
+      await ensureSupplierAccount(tx, shop.id, newSupplier.id, newSupplier.name)
 
-      return tx.customer.findUnique({
-        where: { id: newCustomer.id },
+      return tx.supplier.findUnique({
+        where: { id: newSupplier.id },
         include: { account: true },
       })
     })
 
-    return NextResponse.json(customer)
-  } catch (error: any) {
+    return NextResponse.json(supplier)
+  } catch (error) {
+    console.error('Supplier creation error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

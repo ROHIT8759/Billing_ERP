@@ -70,11 +70,13 @@ export default function ProductsPage() {
         price: product.price.toString(),
         stock: product.stock.toString(),
         hsnCode: product.hsnCode || '',
-        gstRate: product.gstRate?.toString() || '18'
+        gstRate: product.gstRate?.toString() || '18',
+        reorderLevel: product.reorderLevel?.toString() || '',
+        barcode: product.barcode || '',
       })
     } else {
       setEditingId(null)
-      setFormData({ name: '', category: '', price: '', stock: '0', hsnCode: '', gstRate: '18' })
+      setFormData({ name: '', category: '', price: '', stock: '0', hsnCode: '', gstRate: '18', reorderLevel: '', barcode: '' })
     }
     setIsModalOpen(true)
   }
@@ -183,6 +185,7 @@ export default function ProductsPage() {
                   <th className="px-6 py-4 font-medium">Category</th>
                   <th className="px-6 py-4 font-medium text-right">Price</th>
                   <th className="px-6 py-4 font-medium text-right">Stock</th>
+                  <th className="px-6 py-4 font-medium text-right">Reorder At</th>
                   <th className="px-6 py-4 font-medium">Added On</th>
                   <th className="px-6 py-4 font-medium text-right">Actions</th>
                 </tr>
@@ -202,9 +205,16 @@ export default function ProductsPage() {
                       {formatCurrency(product.price)}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Badge variant={product.stock > 10 ? 'success' : product.stock > 0 ? 'warning' : 'danger'}>
+                      <Badge variant={product.reorderLevel != null && product.stock <= product.reorderLevel ? 'danger' : product.stock > 10 ? 'success' : product.stock > 0 ? 'warning' : 'danger'}>
                         {product.stock} units
                       </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-right text-slate-500">
+                      {product.reorderLevel != null ? (
+                        <span className={product.stock <= product.reorderLevel ? 'text-red-600 font-medium' : 'text-slate-500'}>
+                          {product.reorderLevel}
+                        </span>
+                      ) : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-6 py-4 text-slate-500">{formatDate(product.createdAt)}</td>
                     <td className="px-6 py-4 text-right">
