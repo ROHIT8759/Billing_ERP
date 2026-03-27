@@ -13,10 +13,23 @@ type Invoice = {
   invoiceNo: string
   totalAmount: number
   gstAmount: number
+  paidAmount: number
+  outstandingAmount: number
+  paymentStatus: string
   status: string
+  dueDate: string | null
   createdAt: string
   customer: { name: string }
-  items: any[]
+  items: { id: string }[]
+}
+
+function paymentBadge(s: string): { variant: 'success' | 'warning' | 'danger' | 'default'; label: string } {
+  switch (s) {
+    case 'PAID':    return { variant: 'success', label: 'Paid' }
+    case 'PARTIAL': return { variant: 'warning', label: 'Partial' }
+    case 'OVERDUE': return { variant: 'danger',  label: 'Overdue' }
+    default:        return { variant: 'danger',  label: 'Unpaid' }
+  }
 }
 
 export default function SalesPage() {
@@ -117,7 +130,8 @@ export default function SalesPage() {
                   <th className="px-6 py-4 font-medium">Customer</th>
                   <th className="px-6 py-4 font-medium">Date</th>
                   <th className="px-6 py-4 font-medium text-right">Amount</th>
-                  <th className="px-6 py-4 font-medium text-center">Status</th>
+                  <th className="px-6 py-4 font-medium text-right">Outstanding</th>
+                  <th className="px-6 py-4 font-medium text-center">Payment</th>
                   <th className="px-6 py-4 font-medium text-right">Actions</th>
                 </tr>
               </thead>
@@ -130,8 +144,15 @@ export default function SalesPage() {
                     <td className="px-6 py-4 text-right font-medium text-slate-900">
                       {formatCurrency(invoice.totalAmount)}
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      {invoice.outstandingAmount > 0 ? (
+                        <span className="font-medium text-red-600">{formatCurrency(invoice.outstandingAmount)}</span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-center">
-                      <Badge variant="success">Paid</Badge>
+                      {(() => { const b = paymentBadge(invoice.paymentStatus); return <Badge variant={b.variant}>{b.label}</Badge> })()}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">

@@ -69,6 +69,8 @@ model Shop {
   suppliers      Supplier[]
   invoices       Invoice[]
   purchases      Purchase[]
+  invoiceAllocations  InvoiceAllocation[]
+  purchaseAllocations PurchaseAllocation[]
   accounts       Account[]
   journals       JournalEntry[]
   godowns        Godown[]
@@ -136,6 +138,11 @@ model Invoice {
   customerId     String
   invoiceNo      String?
   totalAmount    Float
+  paidAmount     Float         @default(0)
+  outstandingAmount Float      @default(0)
+  paymentStatus  String        @default("UNPAID")
+  dueDate        DateTime?
+  lastPaymentAt  DateTime?
   subtotal       Float         @default(0)
   discountAmount Float         @default(0)
   discountType   String        @default("none") // "none" | "trade" | "cash" | "volume"
@@ -148,6 +155,7 @@ model Invoice {
   shop           Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
   customer       Customer      @relation(fields: [customerId], references: [id])
   items          InvoiceItem[]
+  allocations    InvoiceAllocation[]
 
   @@index([shopId])
   @@index([customerId])
@@ -172,14 +180,21 @@ model Purchase {
   id          String         @id @default(uuid())
   shopId      String
   supplierId  String?
+  billNo      String?
   vendorName  String
   totalAmount Float
+  paidAmount  Float          @default(0)
+  outstandingAmount Float    @default(0)
+  paymentStatus String       @default("UNPAID")
+  dueDate     DateTime?
+  lastPaymentAt DateTime?
   imageUrl    String?
   createdAt   DateTime       @default(now())
   shop        Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
   supplier    Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   items       PurchaseItem[]
   batches     Batch[]
+  allocations PurchaseAllocation[]
 
   @@index([shopId])
 }
@@ -228,6 +243,8 @@ model JournalEntry {
   createdAt   DateTime      @default(now())
   shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
   lines       JournalLine[]
+  invoiceAllocations  InvoiceAllocation[]
+  purchaseAllocations PurchaseAllocation[]
 
   @@index([shopId, voucherType, entryDate])
   @@index([shopId, sourceModel, sourceId])
@@ -322,4 +339,38 @@ model PurchaseOrderItem {
   product         Product?      @relation(fields: [productId], references: [id])
 
   @@index([purchaseOrderId])
+}
+
+model InvoiceAllocation {
+  id             String       @id @default(uuid())
+  shopId         String
+  invoiceId      String
+  journalEntryId String
+  amount         Float
+  allocatedAt    DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  shop           Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, invoiceId])
+  @@index([shopId, journalEntryId])
+  @@index([allocatedAt])
+}
+
+model PurchaseAllocation {
+  id             String       @id @default(uuid())
+  shopId         String
+  purchaseId     String
+  journalEntryId String
+  amount         Float
+  allocatedAt    DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  shop           Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  purchase       Purchase     @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, purchaseId])
+  @@index([shopId, journalEntryId])
+  @@index([allocatedAt])
 }

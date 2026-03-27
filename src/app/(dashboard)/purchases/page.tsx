@@ -1,22 +1,35 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, Search, Trash2, Truck, ScanLine, Building2 } from 'lucide-react'
+import { Plus, Search, Trash2, Truck, ScanLine, Building2, CreditCard } from 'lucide-react'
 import Link from 'next/link'
+import { Modal } from '@/components/ui/Modal'
+import { Input } from '@/components/ui/Input'
 
 type Purchase = {
   id: string
   vendorName: string
+  billNo: string | null
   totalAmount: number
+  paidAmount: number
+  outstandingAmount: number
+  paymentStatus: string
   createdAt: string
   items: Array<{ id: string }>
-  supplier: {
-    id: string
-    name: string
-  } | null
+  supplier: { id: string; name: string } | null
+}
+
+function paymentBadge(s: string): { variant: 'success' | 'warning' | 'danger' | 'default'; label: string } {
+  switch (s) {
+    case 'PAID':    return { variant: 'success', label: 'Paid' }
+    case 'PARTIAL': return { variant: 'warning', label: 'Partial' }
+    case 'OVERDUE': return { variant: 'danger',  label: 'Overdue' }
+    default:        return { variant: 'danger',  label: 'Unpaid' }
+  }
 }
 
 export default function PurchasesPage() {
@@ -24,6 +37,11 @@ export default function PurchasesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+
+  const [payingPurchase, setPayingPurchase] = useState<Purchase | null>(null)
+  const [paymentForm, setPaymentForm] = useState({ amount: '', paymentMode: 'CASH', entryDate: '', narration: '' })
+  const [paymentLoading, setPaymentLoading] = useState(false)
+  const [paymentError, setPaymentError] = useState('')
 
   const fetchPurchases = async () => {
     try {
@@ -53,7 +71,45 @@ export default function PurchasesPage() {
     }
   }
 
-  const filteredPurchases = purchases.filter(p => 
+  const openPayment = (p: Purchase) => {
+    setPayingPurchase(p)
+    setPaymentForm({
+      amount: p.outstandingAmount.toFixed(2),
+      paymentMode: 'CASH',
+      entryDate: new Date().toISOString().slice(0, 10),
+      narration: ''
+    })
+    setPaymentError('')
+  }
+
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!payingPurchase) return
+    setPaymentLoading(true)
+    setPaymentError('')
+    try {
+      const res = await fetch(`/api/purchases/${payingPurchase.id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(paymentForm.amount),
+          paymentMode: paymentForm.paymentMode,
+          entryDate: paymentForm.entryDate || undefined,
+          narration: paymentForm.narration || undefined,
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Payment failed')
+      setPayingPurchase(null)
+      await fetchPurchases()
+    } catch (err: any) {
+      setPaymentError(err.message)
+    } finally {
+      setPaymentLoading(false)
+    }
+  }
+
+  const filteredPurchases = purchases.filter(p =>
     p.vendorName.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -133,8 +189,10 @@ export default function PurchasesPage() {
                 <tr>
                   <th className="px-6 py-4 font-medium">Date</th>
                   <th className="px-6 py-4 font-medium">Vendor</th>
-                  <th className="px-6 py-4 font-medium">Items Count</th>
-                  <th className="px-6 py-4 font-medium text-right">Total Amount</th>
+                  <th className="px-6 py-4 font-medium">Items</th>
+                  <th className="px-6 py-4 font-medium text-right">Total</th>
+                  <th className="px-6 py-4 font-medium text-right">Outstanding</th>
+                  <th className="px-6 py-4 font-medium text-center">Payment</th>
                   <th className="px-6 py-4 font-medium text-right">Actions</th>
                 </tr>
               </thead>
@@ -142,13 +200,35 @@ export default function PurchasesPage() {
                 {filteredPurchases.map((purchase) => (
                   <tr key={purchase.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4 text-slate-500">{formatDate(purchase.createdAt)}</td>
-                    <td className="px-6 py-4 font-medium text-slate-900">{purchase.vendorName}</td>
-                    <td className="px-6 py-4 text-slate-500">{purchase.items.length} items</td>
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate-900">{purchase.vendorName}</div>
+                      {purchase.billNo && <div className="text-xs text-slate-500 font-mono">{purchase.billNo}</div>}
+                    </td>
+                    <td className="px-6 py-4 text-slate-500">{purchase.items.length}</td>
                     <td className="px-6 py-4 text-right font-medium text-slate-900">
                       {formatCurrency(purchase.totalAmount)}
                     </td>
                     <td className="px-6 py-4 text-right">
+                      {purchase.outstandingAmount > 0 ? (
+                        <span className="font-medium text-red-600">{formatCurrency(purchase.outstandingAmount)}</span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {(() => { const b = paymentBadge(purchase.paymentStatus); return <Badge variant={b.variant}>{b.label}</Badge> })()}
+                    </td>
+                    <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {purchase.paymentStatus !== 'PAID' && (
+                          <button
+                            onClick={() => openPayment(purchase)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Record Payment"
+                          >
+                            <CreditCard size={16} />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(purchase.id)}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -165,6 +245,72 @@ export default function PurchasesPage() {
           </div>
         )}
       </Card>
+
+      {/* Record Payment Modal */}
+      <Modal isOpen={!!payingPurchase} onClose={() => !paymentLoading && setPayingPurchase(null)} title="Record Payment">
+        {payingPurchase && (
+          <form onSubmit={handlePaymentSubmit} className="space-y-4">
+            <div className="bg-slate-50 rounded-xl px-4 py-3 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Vendor</span>
+                <span className="font-medium text-slate-900">{payingPurchase.vendorName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Outstanding</span>
+                <span className="font-bold text-red-600">{formatCurrency(payingPurchase.outstandingAmount)}</span>
+              </div>
+            </div>
+
+            <Input
+              label="Amount *"
+              type="number"
+              step="0.01"
+              min="0.01"
+              max={payingPurchase.outstandingAmount}
+              value={paymentForm.amount}
+              onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+              required
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Mode</label>
+                <select
+                  value={paymentForm.paymentMode}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, paymentMode: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                >
+                  <option value="CASH">Cash</option>
+                  <option value="BANK">Bank</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={paymentForm.entryDate}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, entryDate: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                />
+              </div>
+            </div>
+
+            <Input
+              label="Notes"
+              value={paymentForm.narration}
+              onChange={(e) => setPaymentForm({ ...paymentForm, narration: e.target.value })}
+              placeholder="Optional reference / narration"
+            />
+
+            {paymentError && <p className="text-sm text-red-600">{paymentError}</p>}
+
+            <div className="pt-2 flex justify-end gap-3">
+              <Button type="button" variant="ghost" onClick={() => setPayingPurchase(null)} disabled={paymentLoading}>Cancel</Button>
+              <Button type="submit" loading={paymentLoading}>Record Payment</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   )
 }

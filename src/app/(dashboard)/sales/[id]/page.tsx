@@ -1,12 +1,23 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { Input } from '@/components/ui/Input'
+import { Modal } from '@/components/ui/Modal'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ArrowLeft, Printer, Download, Store } from 'lucide-react'
+import { ArrowLeft, Printer, Download, Store, CreditCard } from 'lucide-react'
 import Link from 'next/link'
+
+function paymentBadge(s: string): { variant: 'success' | 'warning' | 'danger' | 'default'; label: string } {
+  switch (s) {
+    case 'PAID':    return { variant: 'success', label: 'Paid' }
+    case 'PARTIAL': return { variant: 'warning', label: 'Partial' }
+    case 'OVERDUE': return { variant: 'danger',  label: 'Overdue' }
+    default:        return { variant: 'danger',  label: 'Unpaid' }
+  }
+}
 
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = React.use(params)
@@ -14,22 +25,61 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    const fetchInvoice = async () => {
-      try {
-        const res = await fetch(`/api/invoices/${unwrappedParams.id}`)
-        if (!res.ok) throw new Error('Failed to fetch invoice')
-        const data = await res.json()
-        setInvoice(data)
-      } catch (err: any) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false)
+  const [paymentForm, setPaymentForm] = useState({ amount: '', paymentMode: 'CASH', entryDate: '', narration: '' })
+  const [paymentLoading, setPaymentLoading] = useState(false)
+  const [paymentError, setPaymentError] = useState('')
 
-    fetchInvoice()
+  const fetchInvoice = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/invoices/${unwrappedParams.id}`)
+      if (!res.ok) throw new Error('Failed to fetch invoice')
+      setInvoice(await res.json())
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }, [unwrappedParams.id])
+
+  useEffect(() => { fetchInvoice() }, [fetchInvoice])
+
+  const openPayment = () => {
+    setPaymentForm({
+      amount: invoice?.outstandingAmount?.toFixed(2) ?? '',
+      paymentMode: 'CASH',
+      entryDate: new Date().toISOString().slice(0, 10),
+      narration: ''
+    })
+    setPaymentError('')
+    setIsPaymentOpen(true)
+  }
+
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPaymentLoading(true)
+    setPaymentError('')
+    try {
+      const res = await fetch(`/api/invoices/${unwrappedParams.id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(paymentForm.amount),
+          paymentMode: paymentForm.paymentMode,
+          entryDate: paymentForm.entryDate || undefined,
+          narration: paymentForm.narration || undefined,
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Payment failed')
+      setIsPaymentOpen(false)
+      await fetchInvoice()
+    } catch (err: any) {
+      setPaymentError(err.message)
+    } finally {
+      setPaymentLoading(false)
+    }
+  }
 
   if (loading) return <div className="p-10 text-center text-slate-500">Loading invoice details...</div>
   if (error) return <div className="p-10 text-center text-red-500">{error}</div>
@@ -50,11 +100,16 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-slate-500 text-sm">Created on {formatDate(invoice.createdAt)}</p>
           </div>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={() => window.print()} className="print:hidden">
+        <div className="flex gap-3 print:hidden">
+          {invoice.paymentStatus !== 'PAID' && (
+            <Button variant="primary" onClick={openPayment}>
+              <CreditCard size={16} /> Record Payment
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => window.print()}>
             <Printer size={16} /> Print
           </Button>
-          <Button variant="primary" className="print:hidden">
+          <Button variant="outline">
             <Download size={16} /> Download PDF
           </Button>
         </div>
@@ -80,18 +135,31 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div className="mt-8 md:mt-0 text-left md:text-right">
             <h1 className="text-4xl font-black text-slate-200 uppercase tracking-widest mb-2">INVOICE</h1>
-            <Badge variant="success" className="mb-4 inline-flex items-center px-3 py-1 text-sm border-0">
-              {invoice.status.toUpperCase()}
-            </Badge>
+            {(() => { const b = paymentBadge(invoice.paymentStatus); return <Badge variant={b.variant} className="mb-4 inline-flex items-center px-3 py-1 text-sm border-0">{b.label}</Badge> })()}
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm mt-4">
               <span className="text-slate-500 font-medium">Invoice No:</span>
               <span className="text-slate-900 font-semibold">{invoice.invoiceNo}</span>
-              
+
               <span className="text-slate-500 font-medium">Date:</span>
               <span className="text-slate-900">{formatDate(invoice.createdAt)}</span>
-              
-              <span className="text-slate-500 font-medium">Total Due:</span>
+
+              <span className="text-slate-500 font-medium">Total Amount:</span>
               <span className="text-indigo-600 font-bold">{formatCurrency(invoice.totalAmount)}</span>
+
+              {invoice.paidAmount > 0 && <>
+                <span className="text-slate-500 font-medium">Paid:</span>
+                <span className="text-emerald-600 font-semibold">{formatCurrency(invoice.paidAmount)}</span>
+              </>}
+
+              {invoice.outstandingAmount > 0 && <>
+                <span className="text-slate-500 font-medium">Outstanding:</span>
+                <span className="text-red-600 font-bold">{formatCurrency(invoice.outstandingAmount)}</span>
+              </>}
+
+              {invoice.dueDate && <>
+                <span className="text-slate-500 font-medium">Due Date:</span>
+                <span className="text-slate-900">{formatDate(invoice.dueDate)}</span>
+              </>}
             </div>
           </div>
         </div>
@@ -166,6 +234,64 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           .print\\:hidden { display: none !important; }
         }
       `}} />
+
+      {/* Record Payment Modal */}
+      <Modal isOpen={isPaymentOpen} onClose={() => !paymentLoading && setIsPaymentOpen(false)} title="Record Payment">
+        <form onSubmit={handlePaymentSubmit} className="space-y-4">
+          <div className="bg-slate-50 rounded-xl px-4 py-3 text-sm flex justify-between">
+            <span className="text-slate-500">Outstanding</span>
+            <span className="font-bold text-red-600">{invoice && formatCurrency(invoice.outstandingAmount)}</span>
+          </div>
+
+          <Input
+            label="Amount *"
+            type="number"
+            step="0.01"
+            min="0.01"
+            max={invoice?.outstandingAmount}
+            value={paymentForm.amount}
+            onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+            required
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Payment Mode</label>
+              <select
+                value={paymentForm.paymentMode}
+                onChange={(e) => setPaymentForm({ ...paymentForm, paymentMode: e.target.value })}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+              >
+                <option value="CASH">Cash</option>
+                <option value="BANK">Bank</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+              <input
+                type="date"
+                value={paymentForm.entryDate}
+                onChange={(e) => setPaymentForm({ ...paymentForm, entryDate: e.target.value })}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+              />
+            </div>
+          </div>
+
+          <Input
+            label="Notes"
+            value={paymentForm.narration}
+            onChange={(e) => setPaymentForm({ ...paymentForm, narration: e.target.value })}
+            placeholder="Optional reference / narration"
+          />
+
+          {paymentError && <p className="text-sm text-red-600">{paymentError}</p>}
+
+          <div className="pt-2 flex justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={() => setIsPaymentOpen(false)} disabled={paymentLoading}>Cancel</Button>
+            <Button type="submit" loading={paymentLoading}>Record Payment</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

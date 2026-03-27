@@ -81,6 +81,167 @@ function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
+export function derivePaymentStatus(
+  totalAmount: number,
+  outstandingAmount: number,
+  dueDate?: Date | null,
+  now = new Date()
+) {
+  const normalizedTotal = round2(totalAmount)
+  const normalizedOutstanding = round2(outstandingAmount)
+
+  if (normalizedOutstanding <= 0) {
+    return 'PAID'
+  }
+
+  if (normalizedOutstanding > 0 && normalizedOutstanding < normalizedTotal) {
+    return 'PARTIAL'
+  }
+
+  if (normalizedOutstanding === normalizedTotal && dueDate && dueDate < now) {
+    return 'OVERDUE'
+  }
+
+  return 'UNPAID'
+}
+
+export function assertAllocationAmountValid(amount: number, outstanding: number) {
+  const normalizedAmount = round2(amount)
+  const normalizedOutstanding = round2(outstanding)
+
+  if (normalizedAmount <= 0) {
+    throw new Error('Allocation amount must be greater than zero')
+  }
+
+  if (normalizedAmount > normalizedOutstanding) {
+    throw new Error('Allocation amount cannot exceed outstanding amount')
+  }
+}
+
+export async function recomputeInvoicePaymentState(tx: Tx, invoiceId: string) {
+  const [allocationTotal, invoice] = await Promise.all([
+    tx.invoiceAllocation.aggregate({
+      where: { invoiceId },
+      _sum: { amount: true },
+    }),
+    tx.invoice.findUnique({
+      where: { id: invoiceId },
+      select: {
+        id: true,
+        totalAmount: true,
+        dueDate: true,
+      },
+    }),
+  ])
+
+  if (!invoice) {
+    throw new Error('Invoice not found')
+  }
+
+  const now = new Date()
+  const paidAmount = round2(Number(allocationTotal._sum.amount || 0))
+  const outstandingAmount = Math.max(round2(invoice.totalAmount - paidAmount), 0)
+  const paymentStatus = derivePaymentStatus(
+    invoice.totalAmount,
+    outstandingAmount,
+    invoice.dueDate,
+    now
+  )
+
+  return tx.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      paidAmount,
+      outstandingAmount,
+      paymentStatus,
+      lastPaymentAt: paidAmount > 0 ? now : null,
+    },
+  })
+}
+
+export async function recomputePurchasePaymentState(tx: Tx, purchaseId: string) {
+  const [allocationTotal, purchase] = await Promise.all([
+    tx.purchaseAllocation.aggregate({
+      where: { purchaseId },
+      _sum: { amount: true },
+    }),
+    tx.purchase.findUnique({
+      where: { id: purchaseId },
+      select: {
+        id: true,
+        totalAmount: true,
+        dueDate: true,
+      },
+    }),
+  ])
+
+  if (!purchase) {
+    throw new Error('Purchase not found')
+  }
+
+  const now = new Date()
+  const paidAmount = round2(Number(allocationTotal._sum.amount || 0))
+  const outstandingAmount = Math.max(round2(purchase.totalAmount - paidAmount), 0)
+  const paymentStatus = derivePaymentStatus(
+    purchase.totalAmount,
+    outstandingAmount,
+    purchase.dueDate,
+    now
+  )
+
+  return tx.purchase.update({
+    where: { id: purchaseId },
+    data: {
+      paidAmount,
+      outstandingAmount,
+      paymentStatus,
+      lastPaymentAt: paidAmount > 0 ? now : null,
+    },
+  })
+}
+
+export async function createInvoiceAllocation(
+  tx: Tx,
+  input: {
+    shopId: string
+    invoiceId: string
+    journalEntryId: string
+    amount: number
+    allocatedAt?: Date
+  }
+) {
+  return tx.invoiceAllocation.create({
+    data: {
+      shopId: input.shopId,
+      invoiceId: input.invoiceId,
+      journalEntryId: input.journalEntryId,
+      amount: round2(input.amount),
+      allocatedAt: input.allocatedAt || new Date(),
+    },
+  })
+}
+
+export async function createPurchaseAllocation(
+  tx: Tx,
+  input: {
+    shopId: string
+    purchaseId: string
+    journalEntryId: string
+    amount: number
+    allocatedAt?: Date
+  }
+) {
+  return tx.purchaseAllocation.create({
+    data: {
+      shopId: input.shopId,
+      purchaseId: input.purchaseId,
+      journalEntryId: input.journalEntryId,
+      amount: round2(input.amount),
+      allocatedAt: input.allocatedAt || new Date(),
+    },
+  })
+}
+
 async function nextSequenceCode(tx: Tx, shopId: string, prefix: 'CUS' | 'SUP') {
   const accounts = await tx.account.findMany({
     where: {
