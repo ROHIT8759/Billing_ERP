@@ -60,4 +60,24 @@ export const INDIA_STATES = [
   'Puducherry',
 ]
 
-export const GST_RATE = 0.18
+export const GST_RATE = 0.18 // Default fallback GST rate
+
+/** Calculate GST breakdown based on same-state (CGST+SGST) vs inter-state (IGST) rules */
+export function calcGST(
+  taxableAmount: number,
+  gstRatePct: number,  // e.g. 18 for 18%
+  sameState: boolean
+): { gstAmount: number; cgstAmount: number; sgstAmount: number; igstAmount: number } {
+  const gstAmount = (taxableAmount * gstRatePct) / 100
+  if (sameState) {
+    const half = gstAmount / 2
+    return { gstAmount, cgstAmount: half, sgstAmount: half, igstAmount: 0 }
+  }
+  return { gstAmount, cgstAmount: 0, sgstAmount: 0, igstAmount: gstAmount }
+}
+
+/** Apply trade discount to a unit price */
+export function applyTradeDiscount(price: number, discountPct: number): number {
+  return price * (1 - discountPct / 100)
+}
+
