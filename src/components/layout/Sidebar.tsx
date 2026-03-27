@@ -9,6 +9,7 @@ import {
   Package,
   Users,
   Truck,
+  Building2,
   BookOpen,
   LogOut,
   Store,
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/purchases', icon: Truck, label: 'Purchases' },
   { href: '/products', icon: Package, label: 'Products' },
   { href: '/customers', icon: Users, label: 'Customers' },
+  { href: '/suppliers', icon: Building2, label: 'Suppliers' },
   { href: '/accounting', icon: BookOpen, label: 'Accounting' },
 ]
 
