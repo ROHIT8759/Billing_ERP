@@ -70,8 +70,8 @@ export default function OutstandingReportPage() {
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
-            <Card 
-              className={`p-5 cursor-pointer transition-all ${activeTab === 'RECEIVABLES' ? 'ring-2 ring-emerald-500 bg-emerald-50/30' : 'hover:bg-slate-50'}`}
+            <div 
+              className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-5 cursor-pointer transition-all ${activeTab === 'RECEIVABLES' ? 'ring-2 ring-emerald-500 bg-emerald-50/30' : 'hover:bg-slate-50'}`}
               onClick={() => setActiveTab('RECEIVABLES')}
             >
               <div className="flex justify-between items-start">
@@ -85,10 +85,10 @@ export default function OutstandingReportPage() {
                   {receivables.length} parties
                 </Badge>
               </div>
-            </Card>
+            </div>
 
-            <Card 
-              className={`p-5 cursor-pointer transition-all ${activeTab === 'PAYABLES' ? 'ring-2 ring-rose-500 bg-rose-50/30' : 'hover:bg-slate-50'}`}
+            <div 
+              className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-5 cursor-pointer transition-all ${activeTab === 'PAYABLES' ? 'ring-2 ring-rose-500 bg-rose-50/30' : 'hover:bg-slate-50'}`}
               onClick={() => setActiveTab('PAYABLES')}
             >
               <div className="flex justify-between items-start">
@@ -102,7 +102,7 @@ export default function OutstandingReportPage() {
                   {payables.length} parties
                 </Badge>
               </div>
-            </Card>
+            </div>
           </div>
 
           <Card className="overflow-hidden">

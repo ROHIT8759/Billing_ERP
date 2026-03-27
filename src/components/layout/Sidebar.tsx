@@ -18,6 +18,10 @@ import {
   Layers,
   ClipboardList,
   Barcode,
+  PieChart,
+  LineChart,
+  Target,
+  FileText
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -106,6 +110,33 @@ export function Sidebar({ shopName }: SidebarProps) {
             { href: '/inventory/batches', icon: Layers, label: 'Batches & Expiry' },
             { href: '/inventory/purchase-orders', icon: ClipboardList, label: 'Purchase Orders' },
             { href: '/inventory/barcodes', icon: Barcode, label: 'Barcodes' },
+          ].map(({ href, icon: Icon, label }) => {
+            const isActive = pathname === href || pathname.startsWith(href + '/')
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                  isActive
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                )}
+              >
+                <Icon size={16} />
+                {label}
+              </Link>
+            )
+          })}
+        </div>
+
+        <div className="pt-2 border-t border-slate-700/50 mt-4 pb-10">
+          <p className="px-3 mb-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">MIS Reports</p>
+          {[
+            { href: '/reports/day-book', icon: FileText, label: 'Day Book' },
+            { href: '/reports/stock-valuation', icon: PieChart, label: 'Stock Valuation' },
+            { href: '/reports/expiry', icon: Target, label: 'Expiry Tracker' },
+            { href: '/reports/outstanding', icon: LineChart, label: 'Party Outstanding' },
           ].map(({ href, icon: Icon, label }) => {
             const isActive = pathname === href || pathname.startsWith(href + '/')
             return (

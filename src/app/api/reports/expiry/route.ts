@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       orderBy: { expiryDate: 'asc' }
     })
 
-    const transformed = batches.map(b => {
+    const transformed = batches.map((b: any) => {
       const exp = new Date(b.expiryDate!)
       const isExpired = exp < today
       const daysUntil = isExpired ? 0 : Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))

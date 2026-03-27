@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       costMap[name].totalCost += p.price * p.quantity
     }
 
-    const valuationResult = products.map(prod => {
+    const valuationResult = products.map((prod: any) => {
       const nameKey = prod.name.toLowerCase().trim()
       const costData = costMap[nameKey]
       

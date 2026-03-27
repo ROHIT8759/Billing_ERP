@@ -1,7 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getApiUserAndShop } from '@/lib/api-auth'
-import { AccountType } from '@prisma/client'
+
+const AccountType = {
+  CASH: 'CASH',
+  BANK: 'BANK',
+  CUSTOMER: 'CUSTOMER',
+  SUPPLIER: 'SUPPLIER',
+  SALES: 'SALES',
+  PURCHASE: 'PURCHASE',
+  EXPENSE: 'EXPENSE',
+  SALES_RETURN: 'SALES_RETURN',
+  PURCHASE_RETURN: 'PURCHASE_RETURN',
+  EQUITY: 'EQUITY',
+  GENERAL: 'GENERAL',
+} as const
+type AccountType = typeof AccountType[keyof typeof AccountType]
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +35,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const transformed = accounts.map(acc => {
+    const transformed = accounts.map((acc: any) => {
       let totalDebit = 0
       let totalCredit = 0
       for (const line of acc.journalLines) {
@@ -54,8 +68,8 @@ export async function GET(request: NextRequest) {
 
     // Filter out zero balances, then sort by highest balance
     const filtered = transformed
-      .filter(a => Math.abs(a.netBalance) > 0.01)
-      .sort((a, b) => b.netBalance - a.netBalance)
+      .filter((a: any) => Math.abs(a.netBalance) > 0.01)
+      .sort((a: any, b: any) => b.netBalance - a.netBalance)
 
     return NextResponse.json(filtered)
   } catch (error: any) {
