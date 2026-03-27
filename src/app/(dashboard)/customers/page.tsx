@@ -166,36 +166,36 @@ export default function CustomersPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-slate-50 border-b border-slate-100 text-slate-500">
+            <table className="w-full text-left text-[13px] whitespace-nowrap">
+              <thead className="bg-slate-100 border-b border-slate-200 text-slate-600">
                 <tr>
-                  <th className="px-6 py-4 font-medium">Customer Name</th>
-                  <th className="px-6 py-4 font-medium">Contact</th>
-                  <th className="px-6 py-4 font-medium">Invoices</th>
-                  <th className="px-6 py-4 font-medium">Added On</th>
-                  <th className="px-6 py-4 font-medium text-right">Actions</th>
+                  <th className="px-3 py-2 font-semibold">Customer Name</th>
+                  <th className="px-3 py-2 font-semibold">Contact</th>
+                  <th className="px-3 py-2 font-semibold">Invoices</th>
+                  <th className="px-3 py-2 font-semibold">Added On</th>
+                  <th className="px-3 py-2 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredCustomers.map((customer) => (
-                  <tr key={customer.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <p className="font-medium text-slate-900">{customer.name}</p>
-                      {customer.address && <p className="text-xs text-slate-500 truncate max-w-[200px] mt-0.5">{customer.address}</p>}
+                  <tr key={customer.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                    <td className="px-3 py-2 border-r border-slate-50">
+                      <p className="font-semibold text-slate-900">{customer.name}</p>
+                      {customer.address && <p className="text-[10px] text-slate-500 truncate max-w-[200px] mt-0.5">{customer.address}</p>}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-2 border-r border-slate-50">
                       <div className="flex flex-col gap-0.5">
-                        {customer.phone ? <span className="text-slate-900">{customer.phone}</span> : <span className="text-slate-400 text-xs">No phone</span>}
-                        {customer.email && <span className="text-slate-500 text-xs">{customer.email}</span>}
+                        {customer.phone ? <span className="text-slate-900">{customer.phone}</span> : <span className="text-slate-400 text-[11px]">No phone</span>}
+                        {customer.email && <span className="text-slate-500 text-[11px]">{customer.email}</span>}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-2 border-r border-slate-50">
                       <Badge variant={customer._count.invoices > 0 ? 'info' : 'default'}>
                         {customer._count.invoices} invoices
                       </Badge>
                     </td>
-                    <td className="px-6 py-4 text-slate-500">{formatDate(customer.createdAt)}</td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-3 py-2 text-slate-500 border-r border-slate-50">{formatDate(customer.createdAt)}</td>
+                    <td className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleOpenModal(customer)}

@@ -210,43 +210,43 @@ export default function ProductsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full whitespace-nowrap text-left text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50 text-slate-500">
+            <table className="w-full whitespace-nowrap text-left text-[13px]">
+              <thead className="border-b border-slate-200 bg-slate-100 text-slate-600">
                 <tr>
-                  <th className="px-6 py-4 font-medium">Product</th>
-                  <th className="px-6 py-4 font-medium">Salt / Composition</th>
-                  <th className="px-6 py-4 font-medium">Supplier</th>
-                  <th className="px-6 py-4 font-medium text-right">Price</th>
-                  <th className="px-6 py-4 font-medium text-right">Stock</th>
-                  <th className="px-6 py-4 font-medium text-right">Bands</th>
-                  <th className="px-6 py-4 font-medium">Added On</th>
-                  <th className="px-6 py-4 text-right font-medium">Actions</th>
+                  <th className="px-3 py-2 font-semibold">Product</th>
+                  <th className="px-3 py-2 font-semibold">Salt / Composition</th>
+                  <th className="px-3 py-2 font-semibold">Supplier</th>
+                  <th className="px-3 py-2 font-semibold text-right">Price</th>
+                  <th className="px-3 py-2 font-semibold text-right">Stock</th>
+                  <th className="px-3 py-2 font-semibold text-right">Bands</th>
+                  <th className="px-3 py-2 font-semibold">Added On</th>
+                  <th className="px-3 py-2 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredProducts.map((product) => {
                   const isBelowReorder = product.reorderLevel != null && product.stock <= product.reorderLevel
                   return (
-                    <tr key={product.id} className="transition-colors hover:bg-slate-50/50">
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-slate-900">{product.name}</div>
-                        <div className="text-xs text-slate-500">{product.category || 'Uncategorized'}</div>
+                    <tr key={product.id} className="transition-colors hover:bg-slate-50 border-b border-slate-100">
+                      <td className="px-3 py-2 border-r border-slate-50">
+                        <div className="font-semibold text-slate-900">{product.name}</div>
+                        <div className="text-[10px] text-slate-500">{product.category || 'Uncategorized'}</div>
                       </td>
-                      <td className="px-6 py-4 text-slate-600">{product.saltComposition || '-'}</td>
-                      <td className="px-6 py-4 text-slate-600">{product.primarySupplier?.name || '-'}</td>
-                      <td className="px-6 py-4 text-right font-medium text-slate-900">{formatCurrency(product.price)}</td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-3 py-2 text-slate-600 border-r border-slate-50">{product.saltComposition || '-'}</td>
+                      <td className="px-3 py-2 text-slate-600 border-r border-slate-50">{product.primarySupplier?.name || '-'}</td>
+                      <td className="px-3 py-2 text-right font-bold text-slate-900 border-r border-slate-50">{formatCurrency(product.price)}</td>
+                      <td className="px-3 py-2 text-right border-r border-slate-50">
                         <Badge variant={isBelowReorder ? 'danger' : product.stock > 10 ? 'success' : product.stock > 0 ? 'warning' : 'danger'}>
                           {product.stock} units
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-right text-xs text-slate-500">
+                      <td className="px-3 py-2 text-right text-[11px] text-slate-500 border-r border-slate-50">
                         <div>Min: {product.minStockLevel ?? '-'}</div>
                         <div>Reorder: {product.reorderLevel ?? '-'}</div>
                         <div>Max: {product.maxStockLevel ?? '-'}</div>
                       </td>
-                      <td className="px-6 py-4 text-slate-500">{formatDate(product.createdAt)}</td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-3 py-2 text-slate-500 border-r border-slate-50">{formatDate(product.createdAt)}</td>
+                      <td className="px-3 py-2 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button onClick={() => handleOpenModal(product)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600" title="Edit">
                             <Edit2 size={16} />

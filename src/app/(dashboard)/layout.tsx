@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { TopBar } from '@/components/layout/TopBar'
 
 export default async function DashboardLayout({
   children,
@@ -27,11 +28,12 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <Sidebar shopName={shop.shopName} />
-      <main className="flex-1 ml-64 min-h-screen">
-        <div className="p-8">
+      <div className="flex-1 ml-64 min-h-screen flex flex-col">
+        <TopBar shopName={shop.shopName} userEmail={user.email || 'User'} />
+        <main className="flex-1 p-6">
           {children}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 }
