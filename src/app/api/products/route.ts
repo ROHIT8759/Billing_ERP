@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     if (!shop) return NextResponse.json({ error: 'Shop not found' }, { status: 404 })
 
     const body = await request.json()
-    const { name, category, price, stock } = body
+    const { name, category, price, stock, hsnCode, gstRate, reorderLevel, barcode } = body
 
     if (!name || price === undefined) {
       return NextResponse.json({ error: 'Name and price are required' }, { status: 400 })
@@ -68,6 +68,10 @@ export async function POST(request: Request) {
         category: category || null,
         price: parseFloat(price.toString()),
         stock: parseInt(stock?.toString() || '0', 10),
+        hsnCode: hsnCode?.trim() || null,
+        gstRate: parseFloat(gstRate?.toString() || '18'),
+        reorderLevel: reorderLevel != null && reorderLevel !== '' ? parseInt(reorderLevel.toString(), 10) : null,
+        barcode: barcode?.trim() || null,
       }
     })
 

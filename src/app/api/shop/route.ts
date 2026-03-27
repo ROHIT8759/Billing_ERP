@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ensureAccountingSetup } from '@/lib/accounting'
 import { cookies } from 'next/headers'
 
 export async function POST(request: Request) {
@@ -60,6 +61,8 @@ export async function POST(request: Request) {
         pincode,
       }
     })
+
+    await ensureAccountingSetup(shop.id)
 
     return NextResponse.json(shop)
   } catch (error: any) {

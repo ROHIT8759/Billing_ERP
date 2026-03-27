@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { deleteJournalEntriesForSource } from '@/lib/accounting'
+import { getApiUserAndShop } from '@/lib/api-auth'
 
 export async function DELETE(
   request: Request,
@@ -9,22 +9,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll() {},
-        },
-      }
-    )
-
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user, shop } = await getApiUserAndShop()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const shop = await prisma.shop.findUnique({ where: { userId: user.id } })
     if (!shop) return NextResponse.json({ error: 'Shop not found' }, { status: 404 })
 
     const existing = await prisma.purchase.findUnique({ where: { id }, include: { items: true } })
@@ -34,7 +20,7 @@ export async function DELETE(
 
     // Optional: Return stock to products when deleting a purchase?
     // We'll reverse the operation we did on create
-    await prisma.$transaction(async (tx: any) => {
+    await prisma.$transaction(async (tx) => {
       for (const item of existing.items) {
         if (item.productName) {
           const product = await tx.product.findFirst({
@@ -49,6 +35,7 @@ export async function DELETE(
           }
         }
       }
+      await deleteJournalEntriesForSource(tx, shop.id, 'Purchase', id)
       await tx.purchase.delete({ where: { id } })
     })
 
