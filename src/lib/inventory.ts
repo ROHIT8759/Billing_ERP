@@ -164,7 +164,7 @@ export async function ensureDraftPurchaseOrdersForLowStock(
 
   const createdOrders = []
 
-  for (const [supplierId, products] of grouped.entries()) {
+  for (const [, products] of grouped.entries()) {
     const supplierName = products[0]?.primarySupplier?.name || ''
     const poNumber = await nextPoNumber(tx, shopId)
     const order = await tx.purchaseOrder.create({

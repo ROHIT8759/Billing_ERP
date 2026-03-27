@@ -54,7 +54,7 @@ export function Sidebar({ shopName }: SidebarProps) {
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-64 bg-slate-900 flex flex-col z-40">
+    <aside className="fixed left-0 top-0 h-full w-64 bg-slate-900 flex flex-col z-40 overflow-hidden">
       {/* Logo */}
       <div className="p-6 border-b border-slate-700/50">
         <div className="flex items-center gap-3">
@@ -63,7 +63,7 @@ export function Sidebar({ shopName }: SidebarProps) {
           </div>
           <div>
             <p className="text-white font-bold text-sm leading-tight">Smart Billing</p>
-            <p className="text-slate-400 text-xs truncate max-w-[130px]">
+            <p className="text-slate-400 text-xs truncate max-w-32.5">
               {shopName || 'ERP System'}
             </p>
           </div>
@@ -71,7 +71,7 @@ export function Sidebar({ shopName }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
         {navItems.map(({ href, icon: Icon, label }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
           return (

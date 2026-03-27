@@ -76,7 +76,7 @@ export default function PurchaseOrdersPage() {
       return
     }
     await fetchOrders()
-    alert(Created  draft purchase order.)
+    alert(`Created ${payload.createdCount} draft purchase order${payload.createdCount > 1 ? 's' : ''}.`)
   }
 
   const openModal = (o?: PurchaseOrder) => {
@@ -218,8 +218,8 @@ export default function PurchaseOrdersPage() {
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((o) => (
                   <tr key={o.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-mono text-xs text-slate-700">{o.poNumber || '—'}</td>
-                    <td className="px-6 py-4 font-medium text-slate-900">{o.vendorName || <span className="text-slate-400">—</span>}</td>
+                    <td className="px-6 py-4 font-mono text-xs text-slate-700">{o.poNumber || 'Ã¢â‚¬â€'}</td>
+                    <td className="px-6 py-4 font-medium text-slate-900">{o.vendorName || <span className="text-slate-400">Ã¢â‚¬â€</span>}</td>
                     <td className="px-6 py-4 text-slate-600">{o.items.length} item{o.items.length !== 1 ? 's' : ''}</td>
                     <td className="px-6 py-4 text-right font-medium text-slate-900">{formatCurrency(o.totalAmount)}</td>
                     <td className="px-6 py-4">
