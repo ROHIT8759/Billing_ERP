@@ -184,41 +184,41 @@ export default function PurchasesPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-slate-50 border-b border-slate-100 text-slate-500">
+            <table className="w-full text-left text-[13px] whitespace-nowrap">
+              <thead className="bg-slate-100 border-b border-slate-200 text-slate-600">
                 <tr>
-                  <th className="px-6 py-4 font-medium">Date</th>
-                  <th className="px-6 py-4 font-medium">Vendor</th>
-                  <th className="px-6 py-4 font-medium">Items</th>
-                  <th className="px-6 py-4 font-medium text-right">Total</th>
-                  <th className="px-6 py-4 font-medium text-right">Outstanding</th>
-                  <th className="px-6 py-4 font-medium text-center">Payment</th>
-                  <th className="px-6 py-4 font-medium text-right">Actions</th>
+                  <th className="px-3 py-2 font-semibold border-r border-slate-200">Date</th>
+                  <th className="px-3 py-2 font-semibold border-r border-slate-200">Vendor</th>
+                  <th className="px-3 py-2 font-semibold border-r border-slate-200">Items</th>
+                  <th className="px-3 py-2 font-semibold text-right border-r border-slate-200">Total</th>
+                  <th className="px-3 py-2 font-semibold text-right border-r border-slate-200">Outstanding</th>
+                  <th className="px-3 py-2 font-semibold text-center border-r border-slate-200">Payment</th>
+                  <th className="px-3 py-2 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredPurchases.map((purchase) => (
-                  <tr key={purchase.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 text-slate-500">{formatDate(purchase.createdAt)}</td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-slate-900">{purchase.vendorName}</div>
-                      {purchase.billNo && <div className="text-xs text-slate-500 font-mono">{purchase.billNo}</div>}
+                  <tr key={purchase.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                    <td className="px-3 py-2 text-slate-500 border-r border-slate-50">{formatDate(purchase.createdAt)}</td>
+                    <td className="px-3 py-2 border-r border-slate-50">
+                      <div className="font-semibold text-slate-900">{purchase.vendorName}</div>
+                      {purchase.billNo && <div className="text-[10px] text-slate-500 font-mono">{purchase.billNo}</div>}
                     </td>
-                    <td className="px-6 py-4 text-slate-500">{purchase.items.length}</td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-900">
+                    <td className="px-3 py-2 text-slate-500 border-r border-slate-50">{purchase.items.length}</td>
+                    <td className="px-3 py-2 text-right font-bold text-slate-900 border-r border-slate-50">
                       {formatCurrency(purchase.totalAmount)}
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-3 py-2 text-right border-r border-slate-50">
                       {purchase.outstandingAmount > 0 ? (
-                        <span className="font-medium text-red-600">{formatCurrency(purchase.outstandingAmount)}</span>
+                        <span className="font-semibold text-red-600">{formatCurrency(purchase.outstandingAmount)}</span>
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-3 py-2 text-center border-r border-slate-50">
                       {(() => { const b = paymentBadge(purchase.paymentStatus); return <Badge variant={b.variant}>{b.label}</Badge> })()}
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {purchase.paymentStatus !== 'PAID' && (
                           <button

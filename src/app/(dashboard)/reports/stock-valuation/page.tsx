@@ -106,45 +106,45 @@ export default function StockValuationPage() {
 
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
+              <table className="w-full text-left text-[13px] whitespace-nowrap">
                 <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-semibold cursor-pointer select-none">
                   <tr>
-                    <th className="px-5 py-4 hover:bg-slate-200" onClick={() => handleSort('name')}>
+                    <th className="px-3 py-2 hover:bg-slate-200 border-r border-slate-200" onClick={() => handleSort('name')}>
                       <div className="flex items-center gap-1">Product <SortIcon field="name" /></div>
                     </th>
-                    <th className="px-5 py-4 hover:bg-slate-200 text-right" onClick={() => handleSort('stock')}>
+                    <th className="px-3 py-2 hover:bg-slate-200 text-right border-r border-slate-200" onClick={() => handleSort('stock')}>
                       <div className="flex items-center justify-end gap-1">On Hand <SortIcon field="stock" /></div>
                     </th>
-                    <th className="px-5 py-4 hover:bg-slate-200 text-right" onClick={() => handleSort('avgCost')}>
+                    <th className="px-3 py-2 hover:bg-slate-200 text-right border-r border-slate-200" onClick={() => handleSort('avgCost')}>
                       <div className="flex items-center justify-end gap-1">Avg Unit Cost <SortIcon field="avgCost" /></div>
                     </th>
-                    <th className="px-5 py-4 hover:bg-slate-200 text-right" onClick={() => handleSort('price')}>
+                    <th className="px-3 py-2 hover:bg-slate-200 text-right border-r border-slate-200" onClick={() => handleSort('price')}>
                       <div className="flex items-center justify-end gap-1">Selling Price <SortIcon field="price" /></div>
                     </th>
-                    <th className="px-5 py-4 hover:bg-slate-200 text-right bg-amber-50/50" onClick={() => handleSort('totalCostValue')}>
+                    <th className="px-3 py-2 hover:bg-slate-200 text-right bg-amber-50/50 border-r border-slate-200" onClick={() => handleSort('totalCostValue')}>
                       <div className="flex items-center justify-end gap-1 text-amber-800">Total Cost <SortIcon field="totalCostValue" /></div>
                     </th>
-                    <th className="px-5 py-4 hover:bg-slate-200 text-right bg-emerald-50/50" onClick={() => handleSort('totalRetailValue')}>
+                    <th className="px-3 py-2 hover:bg-slate-200 text-right bg-emerald-50/50" onClick={() => handleSort('totalRetailValue')}>
                       <div className="flex items-center justify-end gap-1 text-emerald-800">Total Retail <SortIcon field="totalRetailValue" /></div>
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {sortedData.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3">
+                    <tr key={row.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                      <td className="px-3 py-2 border-r border-slate-100">
                         <div className="font-medium text-slate-900">{row.name}</div>
-                        {row.category && <div className="text-xs text-slate-500 mt-0.5">{row.category}</div>}
+                        {row.category && <div className="text-[10px] text-slate-500 mt-0.5">{row.category}</div>}
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-3 py-2 text-right border-r border-slate-100">
                         <Badge variant="default" className="bg-slate-100 text-slate-700">{row.stock}</Badge>
                       </td>
-                      <td className="px-5 py-3 text-right text-slate-600">{formatCurrency(row.avgCost)}</td>
-                      <td className="px-5 py-3 text-right text-slate-600">{formatCurrency(row.price)}</td>
-                      <td className="px-5 py-3 text-right font-medium text-amber-800 bg-amber-50/10 border-l border-amber-50">
+                      <td className="px-3 py-2 text-right text-slate-600 border-r border-slate-100">{formatCurrency(row.avgCost)}</td>
+                      <td className="px-3 py-2 text-right text-slate-600 border-r border-slate-100">{formatCurrency(row.price)}</td>
+                      <td className="px-3 py-2 text-right font-medium text-amber-800 bg-amber-50/10 border-r border-amber-50">
                         {formatCurrency(row.totalCostValue)}
                       </td>
-                      <td className="px-5 py-3 text-right font-medium text-emerald-800 bg-emerald-50/10 border-l border-emerald-50">
+                      <td className="px-3 py-2 text-right font-medium text-emerald-800 bg-emerald-50/10">
                         {formatCurrency(row.totalRetailValue)}
                       </td>
                     </tr>
