@@ -159,7 +159,7 @@ export default function NewInvoicePage() {
 
     setSubstituteSuggestions(prev => ({ ...prev, [i]: [] }))
   }
-  const updateItem = (i: number, field: keyof LineItem, value: string | number) => {
+  const updateItem = (i: number, field: keyof LineItem, value: any) => {
     setItems(prev => {
       const next = [...prev]
       if (field === 'quantity') {
