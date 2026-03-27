@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { parseOCRText } from '@/lib/ocr/parser'
 
-// Note: Ensure GOOGLE_VISION_API_KEY is set in your .env.local
-const GOOGLE_VISION_API_URL = 'https://vision.googleapis.com/v1/images:annotate'
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 export async function POST(request: Request) {
   try {
@@ -31,12 +29,9 @@ export async function POST(request: Request) {
     }
 
     // 1. Upload file to Supabase Storage (bucket: "invoices")
-    //    We need to make sure this bucket exists or is created here.
     const fileExt = file.name.split('.').pop()
     const fileName = `${user.id}/${Date.now()}.${fileExt}`
     
-    // We assume an 'invoices' bucket exists. If not, this might fail, 
-    // but the user would need to create it in the Supabase Dashboard.
     const { data: uploadData, error: uploadError } = await supabase
       .storage
       .from('invoices')
@@ -48,56 +43,79 @@ export async function POST(request: Request) {
       imageUrl = publicUrl
     } else {
       console.warn('Failed to upload image to Supabase Storage:', uploadError)
-      // We can still process OCR even if storage fails by using base64 directly
     }
 
-    // 2. Prepare Base64 string for Google Vision API
+    // 2. Prepare Base64 string for Groq Vision API
     const buffer = Buffer.from(await file.arrayBuffer())
     const base64Image = buffer.toString('base64')
 
-    const visionApiKey = process.env.GOOGLE_VISION_API_KEY
-    if (!visionApiKey) {
+    const groqApiKey = process.env.GROQ_API_KEY
+    if (!groqApiKey) {
       return NextResponse.json(
-        { error: 'Google Vision API key not configured' },
+        { error: 'Groq API key not configured' },
         { status: 500 }
       )
     }
 
-    // 3. Call Google Vision API (Document Text Detection)
-    const visionRes = await fetch(`${GOOGLE_VISION_API_URL}?key=${visionApiKey}`, {
+    // 3. Call Groq Llama 3.2 Vision API
+    const groqRes = await fetch(GROQ_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Authorization': `Bearer ${groqApiKey}`,
+        'Content-Type': 'application/json' 
+      },
       body: JSON.stringify({
-        requests: [
+        model: 'llama-3.2-90b-vision-preview',
+        temperature: 0.1,
+        messages: [
           {
-            image: { content: base64Image },
-            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
-          },
-        ],
-      }),
+            role: 'user',
+            content: [
+              { 
+                type: 'text', 
+                text: "Extract data from this invoice image and return ONLY a valid raw JSON object. Do not include markdown code block formatting like ```json. If you cannot read the image, make your best guess. The JSON MUST exactly match this TypeScript interface: { vendorName: string, totalAmount: number, items: [ { name: string, quantity: number, price: number } ] }" 
+              },
+              { 
+                type: 'image_url', 
+                image_url: { url: `data:${file.type};base64,${base64Image}` } 
+              }
+            ]
+          }
+        ]
+      })
     })
 
-    if (!visionRes.ok) {
-      const errorData = await visionRes.json()
-      console.error('Vision API Error:', errorData)
-      return NextResponse.json({ error: 'Failed to process image with OCR' }, { status: 500 })
+    if (!groqRes.ok) {
+      const errorData = await groqRes.json()
+      console.error('Groq API Error:', errorData)
+      return NextResponse.json({ error: 'Failed to process image with Groq OCR' }, { status: 500 })
     }
 
-    const visionData = await visionRes.json()
-    const fullTextAnnotation = visionData.responses[0]?.fullTextAnnotation
+    const groqData = await groqRes.json()
+    let textResponse = groqData.choices[0]?.message?.content || ''
 
-    if (!fullTextAnnotation || !fullTextAnnotation.text) {
-      return NextResponse.json({ error: 'No text detected in the image' }, { status: 400 })
+    if (!textResponse) {
+      return NextResponse.json({ error: 'No text extracted from the image' }, { status: 400 })
     }
 
-    // 4. Parse OCR text using our heuristic parser
-    const parsedInvoice = parseOCRText(fullTextAnnotation.text)
+    // 4. Parse the LLM's JSON
+    // Strip markdown code block wrappers if the LLM adds them despite instructions
+    textResponse = textResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+
+    let parsedInvoice
+    try {
+      parsedInvoice = JSON.parse(textResponse)
+    } catch (parseError) {
+      console.error('Failed to parse Groq JSON output:', textResponse)
+      // Fallback
+      parsedInvoice = { vendorName: 'Unknown Vendor', totalAmount: 0, items: [] }
+    }
 
     // Return structured data along with the uploaded image URL
     return NextResponse.json({
       parsed: parsedInvoice,
       imageUrl,
-      rawText: fullTextAnnotation.text // Useful for debugging if needed
+      rawText: textResponse
     })
   } catch (error: any) {
     console.error('OCR Processing error:', error)

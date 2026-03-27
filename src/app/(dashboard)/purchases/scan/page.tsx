@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, cn } from '@/lib/utils'
 import {
   UploadCloud,
   FileText,
@@ -14,9 +14,11 @@ import {
   Trash2,
   ArrowLeft,
   CheckCircle2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Camera as CameraIcon
 } from 'lucide-react'
 import Link from 'next/link'
+import { CameraScanner } from '@/components/scanner/CameraScanner'
 
 type LineItem = { productName: string; quantity: number; price: number }
 
@@ -29,6 +31,7 @@ export default function AIScannerPage() {
   
   const [isScanning, setIsScanning] = useState(false)
   const [scanStep, setScanStep] = useState<'upload' | 'scanning' | 'review'>('upload')
+  const [inputMode, setInputMode] = useState<'upload' | 'camera'>('upload')
   const [error, setError] = useState('')
 
   // Form State (auto-filled by AI)
@@ -72,15 +75,16 @@ export default function AIScannerPage() {
     setError('')
   }
 
-  const startScan = async () => {
-    if (!file) return
+  const startScan = async (fileToScan?: File) => {
+    const targetFile = fileToScan || file
+    if (!targetFile) return
     
     setIsScanning(true)
     setScanStep('scanning')
     setError('')
 
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('file', targetFile)
 
     try {
       const res = await fetch('/api/ocr', {
@@ -142,6 +146,12 @@ export default function AIScannerPage() {
   const addItem = () => setItems([...items, { productName: '', quantity: 1, price: 0 }])
   const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index))
 
+  const handleCameraCapture = (capturedFile: File, dataUrl: string) => {
+    setFile(capturedFile)
+    setPreviewUrl(dataUrl)
+    startScan(capturedFile)
+  }
+
   const handleSavePurchase = async () => {
     if (!vendorName) return setError('Vendor Name is required')
     if (items.some(i => !i.productName)) return setError('All items need a name')
@@ -195,7 +205,36 @@ export default function AIScannerPage() {
       )}
 
       {scanStep === 'upload' && (
-        <Card className="p-10 border-dashed border-2 bg-slate-50">
+        <div className="space-y-6">
+          {/* Tabs */}
+          <div className="flex p-1 bg-slate-100 rounded-xl w-full max-w-md mx-auto">
+            <button
+              onClick={() => setInputMode('upload')}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all",
+                inputMode === 'upload' ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <UploadCloud size={18} /> Upload Image
+            </button>
+            <button
+              onClick={() => setInputMode('camera')}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all",
+                inputMode === 'camera' ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <CameraIcon size={18} /> Live Camera
+            </button>
+          </div>
+
+          {inputMode === 'camera' ? (
+             <CameraScanner 
+               onCapture={handleCameraCapture} 
+               onClose={() => setInputMode('upload')} 
+             />
+          ) : (
+            <Card className="p-10 border-dashed border-2 bg-slate-50">
           <div 
             className="flex flex-col items-center justify-center py-16 text-center cursor-pointer"
             onDragOver={handleDragOver}
@@ -247,13 +286,15 @@ export default function AIScannerPage() {
                 <Button variant="outline" onClick={() => { setFile(null); setPreviewUrl(null); }}>
                   Cancel
                 </Button>
-                <Button onClick={startScan} disabled={isScanning}>
+                <Button onClick={() => startScan()} disabled={isScanning}>
                   Start AI Extraction
                 </Button>
               </div>
             )}
-          </div>
-        </Card>
+           </div>
+          </Card>
+         )}
+        </div>
       )}
 
       {scanStep === 'scanning' && (
