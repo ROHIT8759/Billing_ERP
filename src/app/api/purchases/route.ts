@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { AccountType, VoucherType } from '@prisma/client'
 import {
   ensureAccountingSetup,
+  ensureSupplierAccount,
   findOrCreateSupplier,
   getSystemAccount,
   postJournalEntry,
@@ -41,27 +42,46 @@ export async function POST(request: Request) {
     await ensureAccountingSetup(shop.id)
 
     const body = await request.json()
-    const { vendorName, items, totalAmount, imageUrl } = body
+    const { supplierId, vendorName, items, totalAmount, imageUrl } = body
 
-    if (!vendorName || !items || items.length === 0) {
-      return NextResponse.json({ error: 'Vendor Name and at least one item are required' }, { status: 400 })
+    if ((!supplierId && !vendorName) || !items || items.length === 0) {
+      return NextResponse.json(
+        { error: 'Supplier or vendor name and at least one item are required' },
+        { status: 400 }
+      )
     }
 
     // Use transaction to create purchase, items, and increment stock
     const purchase = await prisma.$transaction(async (tx) => {
-      const { supplier, account: supplierAccount } = await findOrCreateSupplier(
-        tx,
-        shop.id,
-        vendorName
-      )
+      let supplier: { id: string; name: string; shopId: string }
+      let supplierAccount: { id: string }
+
+      if (supplierId) {
+        const existingSupplier = await tx.supplier.findUnique({
+          where: { id: supplierId },
+        })
+
+        if (!existingSupplier || existingSupplier.shopId !== shop.id) {
+          throw new Error('Supplier not found')
+        }
+
+        supplier = existingSupplier
+        supplierAccount = await ensureSupplierAccount(tx, shop.id, supplier.id, supplier.name)
+      } else {
+        const createdSupplier = await findOrCreateSupplier(tx, shop.id, vendorName)
+        supplier = createdSupplier.supplier
+        supplierAccount = createdSupplier.account
+      }
+
       const purchaseAccount = await getSystemAccount(tx, shop.id, AccountType.PURCHASE)
+      const normalizedVendorName = supplier.name
 
       // 1. Create Purchase
       const newPurchase = await tx.purchase.create({
         data: {
           shopId: shop.id,
           supplierId: supplier.id,
-          vendorName,
+          vendorName: normalizedVendorName,
           totalAmount: parseFloat(totalAmount),
           imageUrl: imageUrl || null,
           items: {
