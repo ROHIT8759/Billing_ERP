@@ -1,27 +1,21 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { AccountType, VoucherType } from '@prisma/client'
+import {
+  ensureAccountingSetup,
+  ensureCustomerAccount,
+  getSystemAccount,
+  postJournalEntry,
+} from '@/lib/accounting'
+import { getApiUserAndShop } from '@/lib/api-auth'
 
 export async function GET() {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll() {},
-        },
-      }
-    )
-
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user, shop } = await getApiUserAndShop()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const shop = await prisma.shop.findUnique({ where: { userId: user.id } })
     if (!shop) return NextResponse.json({ error: 'Shop not found' }, { status: 404 })
+
+    await ensureAccountingSetup(shop.id)
 
     const invoices = await prisma.invoice.findMany({
       where: { shopId: shop.id },
@@ -40,26 +34,25 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll() {},
-        },
-      }
-    )
-
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user, shop } = await getApiUserAndShop()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const shop = await prisma.shop.findUnique({ where: { userId: user.id } })
     if (!shop) return NextResponse.json({ error: 'Shop not found' }, { status: 404 })
 
+    await ensureAccountingSetup(shop.id)
+
     const body = await request.json()
-    const { customerId, items, totalAmount, gstAmount } = body
+    const {
+      customerId,
+      items,
+      subtotal,
+      discountAmount,
+      discountType,
+      totalAmount,
+      gstAmount,
+      cgstAmount,
+      sgstAmount,
+      igstAmount,
+    } = body
 
     if (!customerId || !items || items.length === 0) {
       return NextResponse.json({ error: 'Customer and at least one item are required' }, { status: 400 })
@@ -69,7 +62,7 @@ export async function POST(request: Request) {
     const date = new Date()
     const dateStr = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}`
     const count = await prisma.invoice.count({
-      where: { 
+      where: {
         shopId: shop.id,
         createdAt: { gte: new Date(date.setHours(0,0,0,0)) }
       }
@@ -77,21 +70,40 @@ export async function POST(request: Request) {
     const invoiceNo = `INV-${dateStr}-${(count + 1).toString().padStart(4, '0')}`
 
     // Use a transaction to create invoice, add items, and decrement stock
-    const invoice = await prisma.$transaction(async (tx: any) => {
-      // Create Invoice
+    const invoice = await prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.findUnique({
+        where: { id: customerId },
+        select: { id: true, name: true, shopId: true },
+      })
+
+      if (!customer || customer.shopId !== shop.id) {
+        throw new Error('Customer not found')
+      }
+
+      const salesAccount = await getSystemAccount(tx, shop.id, AccountType.SALES)
+
       const newInvoice = await tx.invoice.create({
         data: {
           shopId: shop.id,
           customerId,
           invoiceNo,
+          subtotal: parseFloat(subtotal || totalAmount),
+          discountAmount: parseFloat(discountAmount || 0),
+          discountType: discountType || 'none',
           totalAmount: parseFloat(totalAmount),
           gstAmount: parseFloat(gstAmount || 0),
+          cgstAmount: parseFloat(cgstAmount || 0),
+          sgstAmount: parseFloat(sgstAmount || 0),
+          igstAmount: parseFloat(igstAmount || 0),
           status: 'paid',
           items: {
             create: items.map((item: any) => ({
               productId: item.productId,
               quantity: parseInt(item.quantity, 10),
-              price: parseFloat(item.price)
+              price: parseFloat(item.price),
+              discountPct: parseFloat(item.discountPct || 0),
+              hsnCode: item.hsnCode || null,
+              taxRate: parseFloat(item.taxRate || 18),
             }))
           }
         },
@@ -110,6 +122,33 @@ export async function POST(request: Request) {
           }
         })
       }
+
+      const refreshedCustomerAccount = await ensureCustomerAccount(
+        tx,
+        shop.id,
+        newInvoice.customerId,
+        newInvoice.customer.name
+      )
+
+      await postJournalEntry(tx, {
+        shopId: shop.id,
+        voucherType: VoucherType.SALES,
+        entryDate: newInvoice.createdAt,
+        reference: newInvoice.invoiceNo,
+        narration: `Sales invoice for ${newInvoice.customer.name}`,
+        sourceModel: 'Invoice',
+        sourceId: newInvoice.id,
+        lines: [
+          {
+            accountId: refreshedCustomerAccount.id,
+            debit: Number(newInvoice.totalAmount),
+          },
+          {
+            accountId: salesAccount.id,
+            credit: Number(newInvoice.totalAmount),
+          },
+        ],
+      })
 
       return newInvoice
     })

@@ -34,7 +34,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { name, category, price, stock } = body
+    const { name, category, price, stock, reorderLevel, barcode, hsnCode, gstRate } = body
 
     const product = await prisma.product.update({
       where: { id },
@@ -43,6 +43,10 @@ export async function PUT(
         category: category || null,
         price: price !== undefined ? parseFloat(price.toString()) : undefined,
         stock: stock !== undefined ? parseInt(stock.toString(), 10) : undefined,
+        reorderLevel: reorderLevel !== undefined ? (reorderLevel === '' || reorderLevel === null ? null : parseInt(reorderLevel.toString(), 10)) : undefined,
+        barcode: barcode !== undefined ? (barcode?.trim() || null) : undefined,
+        hsnCode: hsnCode !== undefined ? (hsnCode?.trim() || null) : undefined,
+        gstRate: gstRate !== undefined ? parseFloat(gstRate.toString()) : undefined,
       }
     })
 

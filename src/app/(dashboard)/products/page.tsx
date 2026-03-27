@@ -301,6 +301,23 @@ export default function ProductsPage() {
               placeholder="18"
             />
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Reorder Level"
+              type="number"
+              min="0"
+              step="1"
+              value={formData.reorderLevel}
+              onChange={(e) => setFormData({ ...formData, reorderLevel: e.target.value })}
+              placeholder="e.g. 10 (alert below this)"
+            />
+            <Input
+              label="Barcode"
+              value={formData.barcode}
+              onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+              placeholder="EAN / Code128 value"
+            />
+          </div>
           <div className="pt-4 flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} disabled={formLoading}>
               Cancel
