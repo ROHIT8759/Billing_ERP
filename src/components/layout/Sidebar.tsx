@@ -21,7 +21,9 @@ import {
   PieChart,
   LineChart,
   Target,
-  FileText
+  FileText,
+  RotateCcw,
+  ArchiveRestore
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -101,6 +103,31 @@ export function Sidebar({ shopName }: SidebarProps) {
             <Scan size={18} />
             AI Invoice Scanner
           </Link>
+        </div>
+
+        <div className="pt-2 border-t border-slate-700/50 mt-4">
+          <p className="px-3 mb-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Returns</p>
+          {[
+            { href: '/sales-returns', icon: RotateCcw, label: 'Credit Notes' },
+            { href: '/purchase-returns', icon: ArchiveRestore, label: 'Debit Notes' },
+          ].map(({ href, icon: Icon, label }) => {
+            const isActive = pathname === href || pathname.startsWith(href + '/')
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                  isActive
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                )}
+              >
+                <Icon size={16} />
+                {label}
+              </Link>
+            )
+          })}
         </div>
 
         <div className="pt-2 border-t border-slate-700/50 mt-4">
