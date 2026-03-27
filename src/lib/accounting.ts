@@ -26,6 +26,12 @@ const DEFAULT_ACCOUNTS = [
     type: AccountType.CUSTOMER,
   },
   {
+    code: '1200',
+    name: 'Inventory Stock',
+    category: AccountCategory.ASSET,
+    type: AccountType.INVENTORY,
+  },
+  {
     code: '2000',
     name: 'Accounts Payable',
     category: AccountCategory.LIABILITY,
@@ -66,6 +72,12 @@ const DEFAULT_ACCOUNTS = [
     name: 'General Expenses',
     category: AccountCategory.EXPENSE,
     type: AccountType.EXPENSE,
+  },
+  {
+    code: '6010',
+    name: 'Inventory Loss / Wastage',
+    category: AccountCategory.EXPENSE,
+    type: AccountType.STOCK_WRITE_OFF,
   },
 ] as const
 
