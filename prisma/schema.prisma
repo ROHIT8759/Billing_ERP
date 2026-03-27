@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  shop      Shop?
+}
+
+model Shop {
+  id         String     @id @default(uuid())
+  userId     String     @unique
+  shopName   String
+  ownerName  String
+  gstNumber  String?
+  phone      String
+  email      String?
+  address    String
+  state      String
+  pincode    String
+  createdAt  DateTime   @default(now())
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products   Product[]
+  customers  Customer[]
+  invoices   Invoice[]
+  purchases  Purchase[]
+}
+
+model Product {
+  id           String        @id @default(uuid())
+  shopId       String
+  name         String
+  category     String?
+  price        Float
+  stock        Int           @default(0)
+  createdAt    DateTime      @default(now())
+  shop         Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  invoiceItems InvoiceItem[]
+
+  @@index([shopId])
+}
+
+model Customer {
+  id        String    @id @default(uuid())
+  shopId    String
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime  @default(now())
+  shop      Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  invoices  Invoice[]
+
+  @@index([shopId])
+}
+
+model Invoice {
+  id          String        @id @default(uuid())
+  shopId      String
+  customerId  String
+  invoiceNo   String?
+  totalAmount Float
+  gstAmount   Float         @default(0)
+  status      String        @default("paid")
+  createdAt   DateTime      @default(now())
+  shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customer    Customer      @relation(fields: [customerId], references: [id])
+  items       InvoiceItem[]
+
+  @@index([shopId])
+  @@index([customerId])
+}
+
+model InvoiceItem {
+  id        String  @id @default(uuid())
+  invoiceId String
+  productId String
+  quantity  Int
+  price     Float
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@index([invoiceId])
+}
+
+model Purchase {
+  id          String         @id @default(uuid())
+  shopId      String
+  vendorName  String
+  totalAmount Float
+  imageUrl    String?
+  createdAt   DateTime       @default(now())
+  shop        Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items       PurchaseItem[]
+
+  @@index([shopId])
+}
+
+model PurchaseItem {
+  id           String   @id @default(uuid())
+  purchaseId   String
+  productName  String
+  quantity     Int
+  price        Float
+  purchase     Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseId])
+}
