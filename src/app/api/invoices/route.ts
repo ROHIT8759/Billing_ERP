@@ -62,6 +62,8 @@ export async function POST(request: Request) {
       subtotal,
       discountAmount,
       discountType,
+      cashDiscountPct,
+      cashDiscountAmount,
       totalAmount,
       gstAmount,
       cgstAmount,
@@ -109,13 +111,20 @@ export async function POST(request: Request) {
       computedDueDate.setDate(computedDueDate.getDate() + paymentTermDaysValue)
     }
 
-    const normalizedItems = (items as InvoiceCreateItemInput[]).map((item) => ({
-      ...item,
-      quantity: Number(item.quantity),
-      price: Number(item.price),
-      discountPct: Number(item.discountPct || 0),
-      taxRate: Number(item.taxRate || 18),
-    }))
+    const normalizedItems = (items as InvoiceCreateItemInput[]).map((item) => {
+      const billedQty = item.billedQty !== undefined ? Number(item.billedQty) : Number(item.quantity)
+      const freeQty = item.freeQty !== undefined ? Number(item.freeQty) : 0
+      return {
+        ...item,
+        quantity: Number(item.quantity),
+        billedQty,
+        freeQty,
+        schemeId: item.schemeId || null,
+        price: Number(item.price),
+        discountPct: Number(item.discountPct || 0),
+        taxRate: Number(item.taxRate || 18),
+      }
+    })
 
     if (normalizedItems.some((item) => !item.productId || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
       return NextResponse.json({ error: 'Each line item requires a valid product and quantity' }, { status: 400 })
@@ -182,6 +191,8 @@ export async function POST(request: Request) {
           subtotal: parseFloat(subtotal || totalAmount),
           discountAmount: parseFloat(discountAmount || 0),
           discountType: discountType || 'none',
+          cashDiscountPct: parseFloat(cashDiscountPct || 0),
+          cashDiscountAmount: parseFloat(cashDiscountAmount || 0),
           totalAmount: totalAmountValue,
           gstAmount: parseFloat(gstAmount || 0),
           cgstAmount: parseFloat(cgstAmount || 0),
@@ -196,6 +207,9 @@ export async function POST(request: Request) {
             create: normalizedItems.map((item) => ({
               productId: item.productId,
               quantity: item.quantity,
+              billedQty: item.billedQty,
+              freeQty: item.freeQty,
+              schemeId: item.schemeId,
               price: item.price,
               discountPct: item.discountPct,
               hsnCode: item.hsnCode || null,
