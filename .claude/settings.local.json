@@ -11,7 +11,8 @@
       "Bash(cd \"D:/Oxify Lab Prijects/Billing_System/billing-erp\" && npx prisma db push 2>&1)",
       "Bash(ls \"D:/Oxify Lab Prijects/Billing_System/billing-erp/src/app/\\(dashboard\\)/\")",
       "Bash(npx tsc:*)",
-      "Bash(ls \"D:/Oxify Lab Prijects/Billing_System/billing-erp/src/app/\\(dashboard\\)/purchases/\")"
+      "Bash(ls \"D:/Oxify Lab Prijects/Billing_System/billing-erp/src/app/\\(dashboard\\)/purchases/\")",
+      "Bash(ls \"D:/Oxify Lab Prijects/Billing_System/billing-erp/src/app/\\(dashboard\\)/purchases/new/\")"
     ]
   }
 }
