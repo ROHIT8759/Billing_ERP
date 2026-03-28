@@ -1,652 +1,674 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { Select } from '@/components/ui/Select'
-import { formatCurrency, calcGST, applyTradeDiscount } from '@/lib/utils'
-import { Plus, Trash2, ArrowLeft, Receipt, Keyboard, Tag, Percent, Info } from 'lucide-react'
+import { startTransition, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
+import { ArrowLeft, Plus, ReceiptText, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
+import { calcGST, cn, formatCurrency } from '@/lib/utils'
 
-type Customer = { id: string; name: string; state?: string | null }
-type Product  = { id: string; name: string; price: number; stock: number; hsnCode?: string | null; gstRate: number; saltComposition?: string | null }
-type LineItem  = {
-  productId: string
+type Customer = {
+  id: string
   name: string
-  quantity: number
-  price: number           // selling price (after product selection)
-  discountPct: number     // trade discount %
-  hsnCode: string
-  taxRate: number
+  state?: string | null
+  phone?: string | null
+  priceLevel?: string | null
 }
 
-const EMPTY_ITEM = (): LineItem => ({
-  productId: '', name: '', quantity: 1, price: 0, discountPct: 0, hsnCode: '', taxRate: 18
-})
+type Product = {
+  id: string
+  name: string
+  stock: number
+  price: number
+  gstRate: number
+  hsnCode?: string | null
+  mrp?: number | null
+  retailRate?: number | null
+  wholesaleRate?: number | null
+  distributorRate?: number | null
+}
 
-// Keyboard shortcuts hint
-const SHORTCUTS = [
-  { key: 'Tab', action: 'Next field' },
-  { key: 'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ on last row', action: 'Add row' },
-  { key: 'F9', action: 'Generate Invoice' },
-  { key: 'F2', action: 'Focus Customer' },
-  { key: 'Del (empty row)', action: 'Remove row' },
-]
+type DbScheme = {
+  id: string
+  productId: string
+  type: string    // FREE_QTY | PERCENTAGE
+  minQty: number
+  freeQty: number
+  discountPct: number
+  isActive: boolean
+  endDate: string | null
+}
+
+type Shop = {
+  id: string
+  state?: string | null
+}
+
+type SaleRow = {
+  productId: string
+  quantity: string
+  freeQty: string
+  schemeId: string | null
+  rate: string
+  discountPct: string
+}
+
+type ApiError = {
+  error?: string
+}
+
+const EMPTY_ROW: SaleRow = {
+  productId: '',
+  quantity: '1',
+  freeQty: '0',
+  schemeId: null,
+  rate: '',
+  discountPct: '0',
+}
+
+function getRateForPriceLevel(product: Product, priceLevel?: string | null): number {
+  switch (priceLevel) {
+    case 'MRP': return product.mrp ?? product.price
+    case 'WHOLESALE': return product.wholesaleRate ?? product.price
+    case 'DISTRIBUTOR': return product.distributorRate ?? product.price
+    default: return product.retailRate ?? product.price
+  }
+}
+
+function applyScheme(
+  billedQty: number,
+  schemes: DbScheme[],
+  productId: string,
+): { freeQty: number; schemeId: string | null } {
+  const now = new Date()
+  const scheme = schemes.find(
+    s => s.productId === productId &&
+      s.isActive &&
+      s.type === 'FREE_QTY' &&
+      (!s.endDate || new Date(s.endDate) >= now) &&
+      billedQty >= s.minQty
+  )
+  if (!scheme) return { freeQty: 0, schemeId: null }
+  const free = Math.floor(billedQty / scheme.minQty) * scheme.freeQty
+  return { freeQty: free, schemeId: scheme.id }
+}
+
+function parseNumber(value: string) {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function parseInteger(value: string) {
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) ? parsed : 0
+}
 
 export default function NewInvoicePage() {
-  const router    = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
-  const [showHints, setShowHints] = useState(false)
-
+  const router = useRouter()
   const [customers, setCustomers] = useState<Customer[]>([])
-  const [products,  setProducts]  = useState<Product[]>([])
-  const [substituteSuggestions, setSubstituteSuggestions] = useState<Record<number, Product[]>>({})
+  const [products, setProducts] = useState<Product[]>([])
+  const [schemes, setSchemes] = useState<DbScheme[]>([])
+  const [shop, setShop] = useState<Shop | null>(null)
+  const [cashDiscountPct, setCashDiscountPct] = useState('0')
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [submitError, setSubmitError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [customerId, setCustomerId] = useState('')
-  const [items, setItems] = useState<LineItem[]>([EMPTY_ITEM()])
-
-  // Invoice-level discount
-  const [cashDiscount, setCashDiscount]  = useState(0)    // % cash discount
-
-  // Volume scheme: "Buy X get Y free" per product
-  const [volSchemes, setVolSchemes] = useState<{ productId: string; buyQty: number; freeQty: number }[]>([])
-
-  // 2D ref grid [row][col] for keyboard navigation
-  // Cols order: product(0), qty(1), price(2), disc(3)
-  const gridRefs = useRef<(HTMLElement | null)[][]>([])
-  const customerRef = useRef<HTMLSelectElement>(null)
+  const [paymentTermDays, setPaymentTermDays] = useState('0')
+  const [initialPaymentAmount, setInitialPaymentAmount] = useState('0')
+  const [paymentMode, setPaymentMode] = useState('CASH')
+  const [notes, setNotes] = useState('')
+  const [items, setItems] = useState<SaleRow[]>([{ ...EMPTY_ROW }])
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/customers').then(r => r.json()),
-      fetch('/api/products').then(r  => r.json()),
-    ]).then(([custData, prodData]) => {
-      setCustomers(custData)
-      setProducts(prodData)
-    }).catch(() => setError('Failed to load data'))
-  }, [])
+    let ignore = false
 
-  // Sync grid refs array size with items count
-  useEffect(() => {
-    gridRefs.current = items.map((_, i) => gridRefs.current[i] || [null, null, null, null])
-  }, [items.length])
+    async function loadData() {
+      setLoading(true)
+      setLoadError('')
 
-  // --- Keyboard navigation ---
-  const NUM_COLS = 4 // product, qty, price, disc
-
-  const focusCell = useCallback((row: number, col: number) => {
-    const el = gridRefs.current[row]?.[col]
-    if (el) { el.focus(); (el as HTMLInputElement).select?.() }
-  }, [])
-
-  const handleCellKeyDown = (
-    e: React.KeyboardEvent,
-    rowIdx: number,
-    colIdx: number
-  ) => {
-    if (e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey && colIdx === NUM_COLS - 1)) {
-      e.preventDefault()
-      if (rowIdx === items.length - 1) {
-        // Last row ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â add a new row and focus its first cell
-        setItems(prev => {
-          const next = [...prev, EMPTY_ITEM()]
-          // Focus after state update
-          setTimeout(() => focusCell(next.length - 1, 0), 50)
-          return next
-        })
-      } else {
-        if (e.key === 'ArrowDown') focusCell(rowIdx + 1, colIdx)
-        else focusCell(rowIdx + 1, 0)
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      if (rowIdx > 0) focusCell(rowIdx - 1, colIdx)
-    } else if (e.key === 'Tab' && e.shiftKey && colIdx === 0) {
-      e.preventDefault()
-      if (rowIdx > 0) focusCell(rowIdx - 1, NUM_COLS - 1)
-    } else if (e.key === 'Tab' && !e.shiftKey) {
-      if (colIdx < NUM_COLS - 1) {
-        e.preventDefault()
-        focusCell(rowIdx, colIdx + 1)
-      }
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
-      const item = items[rowIdx]
-      if (!item.productId && items.length > 1) {
-        e.preventDefault()
-        removeItem(rowIdx)
-        setTimeout(() => focusCell(Math.max(0, rowIdx - 1), 0), 50)
-      }
-    }
-  }
-
-  // F2 ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ customer focus; F9 ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ submit
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'F2') { e.preventDefault(); customerRef.current?.focus() }
-      if (e.key === 'F9') { e.preventDefault(); document.getElementById('pos-submit')?.click() }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
-
-  // --- Item handlers ---
-  const handleProductSelect = async (i: number, productId: string) => {
-    const p = products.find(x => x.id === productId)
-    if (!p) {
-      setSubstituteSuggestions(prev => ({ ...prev, [i]: [] }))
-      return
-    }
-
-    setItems(prev => {
-      const next = [...prev]
-      next[i] = { ...next[i], productId, name: p.name, price: p.price, hsnCode: p.hsnCode || '', taxRate: p.gstRate }
-      return next
-    })
-
-    if (p.stock <= 0) {
       try {
-        const res = await fetch(`/api/products/substitutes?productId=${p.id}`)
-        const suggestions = res.ok ? await res.json() : []
-        setSubstituteSuggestions(prev => ({ ...prev, [i]: suggestions }))
-      } catch {
-        setSubstituteSuggestions(prev => ({ ...prev, [i]: [] }))
+        const [customersRes, productsRes, shopRes, schemesRes] = await Promise.all([
+          fetch('/api/customers'),
+          fetch('/api/products'),
+          fetch('/api/shop'),
+          fetch('/api/schemes'),
+        ])
+
+        const [customersData, productsData, shopData, schemesData] = await Promise.all([
+          customersRes.json(),
+          productsRes.json(),
+          shopRes.json(),
+          schemesRes.json(),
+        ])
+
+        if (!customersRes.ok) {
+          throw new Error((customersData as ApiError).error || 'Failed to load customers')
+        }
+        if (!productsRes.ok) {
+          throw new Error((productsData as ApiError).error || 'Failed to load products')
+        }
+        if (!shopRes.ok) {
+          throw new Error((shopData as ApiError).error || 'Failed to load shop')
+        }
+
+        if (ignore) return
+
+        setCustomers(Array.isArray(customersData) ? customersData : [])
+        setProducts(Array.isArray(productsData) ? productsData : [])
+        setShop(shopData)
+        setSchemes(Array.isArray(schemesData) ? schemesData : [])
+      } catch (error: unknown) {
+        if (!ignore) {
+          setLoadError(error instanceof Error ? error.message : 'Failed to load sale form')
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false)
+        }
       }
+    }
+
+    loadData()
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const customer = customers.find((entry) => entry.id === customerId) || null
+
+  const computedRows = useMemo(() => {
+    return items.map((item) => {
+      const product = products.find((entry) => entry.id === item.productId)
+      const billedQty = parseInteger(item.quantity)
+      const freeQty = parseInteger(item.freeQty)
+      const rate = parseNumber(item.rate || String(product?.price ?? 0))
+      const discountPct = parseNumber(item.discountPct)
+      const taxableAmount = billedQty * rate * (1 - discountPct / 100)
+      const stockImpactQty = billedQty + freeQty
+      const sameState = !shop?.state || !customer?.state || shop.state === customer.state
+      const gstBreakdown = calcGST(taxableAmount, product?.gstRate ?? 18, sameState)
+
+      return {
+        item,
+        product,
+        billedQty,
+        freeQty,
+        stockImpactQty,
+        rate,
+        discountPct,
+        taxableAmount,
+        totalAmount: taxableAmount + gstBreakdown.gstAmount,
+        ...gstBreakdown,
+      }
+    })
+  }, [customer?.state, items, products, shop?.state])
+
+  const totals = useMemo(() => {
+    return computedRows.reduce(
+      (acc, row) => {
+        acc.subtotal += row.billedQty * row.rate
+        acc.discountAmount += row.billedQty * row.rate - row.taxableAmount
+        acc.taxableAmount += row.taxableAmount
+        acc.gstAmount += row.gstAmount
+        acc.cgstAmount += row.cgstAmount
+        acc.sgstAmount += row.sgstAmount
+        acc.igstAmount += row.igstAmount
+        acc.totalAmount += row.totalAmount
+        return acc
+      },
+      {
+        subtotal: 0,
+        discountAmount: 0,
+        taxableAmount: 0,
+        gstAmount: 0,
+        cgstAmount: 0,
+        sgstAmount: 0,
+        igstAmount: 0,
+        totalAmount: 0,
+      }
+    )
+  }, [computedRows])
+
+  const filteredRows = computedRows.filter((row) => row.product && row.billedQty > 0)
+  const initialPaymentValue = parseNumber(initialPaymentAmount)
+
+  const updateRow = (index: number, patch: Partial<SaleRow>) => {
+    setItems((current) =>
+      current.map((row, rowIndex) => {
+        if (rowIndex !== index) return row
+        const next = { ...row, ...patch }
+
+        // Auto-set rate when product changes (respects customer price level)
+        if (patch.productId) {
+          const product = products.find((entry) => entry.id === patch.productId)
+          if (product) {
+            const priceLevel = customers.find(c => c.id === customerId)?.priceLevel
+            next.rate = String(getRateForPriceLevel(product, priceLevel))
+          }
+          // Auto-apply scheme for new product
+          const bQty = parseInteger(next.quantity)
+          const { freeQty, schemeId } = applyScheme(bQty, schemes, next.productId)
+          next.freeQty = String(freeQty)
+          next.schemeId = schemeId
+        }
+
+        // Re-check scheme when quantity changes
+        if (patch.quantity !== undefined && next.productId) {
+          const bQty = parseInteger(next.quantity)
+          const { freeQty, schemeId } = applyScheme(bQty, schemes, next.productId)
+          next.freeQty = String(freeQty)
+          next.schemeId = schemeId
+        }
+
+        return next
+      })
+    )
+  }
+
+  const handleCustomerChange = (newCustomerId: string) => {
+    setCustomerId(newCustomerId)
+    const priceLevel = customers.find(c => c.id === newCustomerId)?.priceLevel
+    setItems((current) =>
+      current.map((row) => {
+        if (!row.productId) return row
+        const product = products.find(p => p.id === row.productId)
+        if (!product) return row
+        return { ...row, rate: String(getRateForPriceLevel(product, priceLevel)) }
+      })
+    )
+  }
+
+  const addRow = () => {
+    setItems((current) => [...current, { ...EMPTY_ROW }])
+  }
+
+  const removeRow = (index: number) => {
+    setItems((current) => {
+      if (current.length === 1) return [{ ...EMPTY_ROW }]
+      return current.filter((_, rowIndex) => rowIndex !== index)
+    })
+  }
+
+  const handleSubmit = async () => {
+    setSubmitError('')
+
+    if (!customerId) {
+      setSubmitError('Select a customer before generating the invoice.')
       return
     }
 
-    setSubstituteSuggestions(prev => ({ ...prev, [i]: [] }))
-  }
-  const updateItem = (i: number, field: keyof LineItem, value: any) => {
-    setItems(prev => {
-      const next = [...prev]
-      if (field === 'quantity') {
-        const stock = products.find(p => p.id === next[i].productId)?.stock ?? Infinity
-        value = Math.min(Math.max(1, parseInt(value, 10) || 1), stock)
-      }
-      next[i] = { ...next[i], [field]: value }
-      return next
-    })
-  }
+    if (filteredRows.length === 0) {
+      setSubmitError('Add at least one valid product row.')
+      return
+    }
 
-  const addItem = () => {
-    setItems(prev => {
-      const next = [...prev, EMPTY_ITEM()]
-      setTimeout(() => focusCell(next.length - 1, 0), 50)
-      return next
-    })
-  }
+    const stockErrorRow = filteredRows.find(
+      (row) => row.product && row.stockImpactQty > row.product.stock
+    )
+    if (stockErrorRow?.product) {
+      setSubmitError(`Insufficient stock for ${stockErrorRow.product.name}.`)
+      return
+    }
 
-  const removeItem = (i: number) => {
-    if (items.length === 1) return
-    setItems(prev => prev.filter((_, idx) => idx !== i))
-  }
+    if (initialPaymentValue > totals.totalAmount) {
+      setSubmitError('Initial payment amount cannot exceed the invoice total.')
+      return
+    }
 
-  // --- Totals ---
-  const selectedCustomer = customers.find(c => c.id === customerId)
-  const shopStatePlaceholder = '' // We don't fetch shop state on client ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â resolved server-side
-
-  // Per-row effective price after trade discount
-  const rowEffectivePrice = (item: LineItem) => applyTradeDiscount(item.price, item.discountPct)
-
-  // Apply volume scheme: add free qty bonus
-  const effectiveQty = (item: LineItem) => {
-    const scheme = volSchemes.find(s => s.productId === item.productId)
-    if (!scheme || scheme.buyQty <= 0) return item.quantity
-    const freeUnits = Math.floor(item.quantity / scheme.buyQty) * scheme.freeQty
-    return item.quantity + freeUnits // display effective units (includes free ones)
-  }
-
-  const lineSubtotal = (item: LineItem) => rowEffectivePrice(item) * item.quantity
-
-  const subtotal = items.reduce((sum, item) => sum + lineSubtotal(item), 0)
-  const cashDiscountAmount = (subtotal * cashDiscount) / 100
-  const taxableAmount = subtotal - cashDiscountAmount
-  const discountAmount = cashDiscountAmount + items.reduce((sum, item) =>
-    sum + (item.price * item.quantity * item.discountPct / 100), 0)
-
-  // Use the customer's state to determine CGST/SGST vs IGST
-  // If no customer state ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ assume IGST (inter-state by default)
-  const sameState = !!(selectedCustomer?.state) // We don't know shop state here; show both options
-  const blendedGSTRate = items.length > 0
-    ? items.reduce((sum, item) => sum + item.taxRate, 0) / items.length
-    : 18
-  const gstCalc = calcGST(taxableAmount, blendedGSTRate, sameState)
-  const totalAmount = taxableAmount + gstCalc.gstAmount
-  const hasInvalidStock = items.some(item => {
-    const product = products.find(p => p.id === item.productId)
-    if (!item.productId) return false
-    if (!product) return true
-    return product.stock <= 0 || product.stock < item.quantity
-  })
-
-  // --- Submit ---
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!customerId) return setError('Please select a customer (F2)')
-    if (items.some(i => !i.productId)) return setError('Please select a product for all rows')
-
-    setLoading(true)
-    setError('')
+    setIsSubmitting(true)
 
     try {
-      const res = await fetch('/api/invoices', {
+      const response = await fetch('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId,
-          items: items.map(item => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: rowEffectivePrice(item),
-            discountPct: item.discountPct,
-            hsnCode: item.hsnCode,
-            taxRate: item.taxRate,
+          items: filteredRows.map((row) => ({
+            productId: row.product!.id,
+            quantity: row.stockImpactQty,
+            billedQty: row.billedQty,
+            freeQty: row.freeQty,
+            schemeId: row.item.schemeId,
+            price: row.rate,
+            discountPct: row.discountPct,
+            hsnCode: row.product?.hsnCode || null,
+            taxRate: row.product?.gstRate ?? 18,
           })),
-          subtotal,
-          discountAmount,
-          discountType: cashDiscount > 0 ? 'cash' : items.some(i => i.discountPct > 0) ? 'trade' : 'none',
-          totalAmount,
-          gstAmount: gstCalc.gstAmount,
-          cgstAmount: gstCalc.cgstAmount,
-          sgstAmount: gstCalc.sgstAmount,
-          igstAmount: gstCalc.igstAmount,
-        })
+          subtotal: totals.taxableAmount,
+          discountAmount: totals.discountAmount,
+          discountType: totals.discountAmount > 0 ? 'trade' : 'none',
+          cashDiscountPct: parseNumber(cashDiscountPct),
+          cashDiscountAmount: totals.taxableAmount * parseNumber(cashDiscountPct) / 100,
+          totalAmount: totals.totalAmount,
+          gstAmount: totals.gstAmount,
+          cgstAmount: totals.cgstAmount,
+          sgstAmount: totals.sgstAmount,
+          igstAmount: totals.igstAmount,
+          paymentTermDays,
+          initialPaymentAmount: initialPaymentValue,
+          paymentMode,
+          notes,
+        }),
       })
 
-      if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error || 'Failed to create invoice')
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error((data as ApiError).error || 'Failed to create invoice')
       }
 
-      const invoice = await res.json()
-      router.push(`/sales/${invoice.id}`)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create invoice')
-      setLoading(false)
+      startTransition(() => {
+        router.push(`/sales/${data.id}`)
+      })
+    } catch (error: unknown) {
+      setSubmitError(error instanceof Error ? error.message : 'Failed to create invoice')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
+  const customerOptions = customers.map((entry) => ({
+    value: entry.id,
+    label: entry.phone ? `${entry.name} (${entry.phone})` : entry.name,
+  }))
+
+  const productOptions = products.map((entry) => ({
+    value: entry.id,
+    label: `${entry.name} (${entry.stock} in stock)`,
+  }))
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-24">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <Link href="/sales">
-          <Button variant="ghost" className="p-2"><ArrowLeft size={20} /></Button>
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">Create Invoice <span className="text-slate-400 font-normal text-base">/ POS</span></h1>
-          <p className="text-slate-500 text-sm">Keyboard-driven billing ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ F2=Customer ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ F9=Submit ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ Tab/ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ=Navigate</p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <Link href="/sales">
+            <Button variant="ghost" className="mt-1">
+              <ArrowLeft size={18} />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Create Sale</h1>
+            <p className="text-sm text-slate-500">Build an invoice, adjust tax, and post it to stock and accounts.</p>
+          </div>
         </div>
-        <button
-          onClick={() => setShowHints(h => !h)}
-          className="flex items-center gap-1.5 text-slate-500 hover:text-indigo-600 text-sm px-3 py-2 rounded-lg hover:bg-indigo-50 transition-colors"
-        >
-          <Keyboard size={16} /> Shortcuts
-        </button>
+
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={addRow}>
+            <Plus size={16} />
+            Add Item
+          </Button>
+          <Button onClick={handleSubmit} loading={isSubmitting} disabled={loading}>
+            <ReceiptText size={16} />
+            Generate Invoice
+          </Button>
+        </div>
       </div>
 
-      {/* Keyboard hints panel */}
-      {showHints && (
-        <Card className="p-4 bg-indigo-50 border-indigo-100">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {SHORTCUTS.map(s => (
-              <div key={s.key} className="flex flex-col gap-1">
-                <kbd className="px-2 py-1 bg-white border border-indigo-200 rounded text-xs font-mono text-indigo-700 shadow-sm">{s.key}</kbd>
-                <span className="text-xs text-slate-600">{s.action}</span>
-              </div>
-            ))}
-          </div>
+      {loadError && (
+        <Card className="border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {loadError}
         </Card>
       )}
 
-      {error && (
-        <div className="p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 flex items-center gap-2">
-          <Receipt size={18} />{error}
-        </div>
+      {submitError && (
+        <Card className="border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {submitError}
+        </Card>
       )}
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* ===== LEFT / MAIN COLUMN ===== */}
-          <div className="lg:col-span-2 space-y-6">
-
-            {/* Step 1: Customer */}
-            <Card className="p-6">
-              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">1</span>
-                Customer
-              </h3>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-6">
+          <Card className="p-5">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <Select
-                label="Select Customer *"
+                id="customer"
+                label="Customer"
                 value={customerId}
-                onChange={e => setCustomerId(e.target.value)}
-                options={customers.map(c => ({ value: c.id, label: c.name + (c.state ? ` (${c.state})` : '') }))}
-                placeholder="Choose a customer... (F2)"
-                required
-                ref={customerRef}
+                onChange={(event) => handleCustomerChange(event.target.value)}
+                options={customerOptions}
+                placeholder={loading ? 'Loading customers...' : 'Select customer'}
+                disabled={loading || !!loadError}
               />
-              {selectedCustomer?.state && (
-                <p className="text-xs text-emerald-600 mt-1.5 flex items-center gap-1">
-                  <Info size={12} /> State: {selectedCustomer.state} ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â {sameState ? 'CGST + SGST will apply' : 'IGST will apply'}
-                </p>
-              )}
-            </Card>
 
-            {/* Step 2: Line Items */}
-            <Card className="p-6">
-              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">2</span>
-                Line Items
-              </h3>
+              <Input
+                id="paymentTermDays"
+                label="Credit Days"
+                type="number"
+                min="0"
+                value={paymentTermDays}
+                onChange={(event) => setPaymentTermDays(event.target.value)}
+              />
 
-              {/* Table header */}
-              <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider px-1 mb-2">
-                <div className="col-span-4">Product</div>
-                <div className="col-span-2">Price (ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹)</div>
-                <div className="col-span-1">Qty</div>
-                <div className="col-span-2">Disc %</div>
-                <div className="col-span-1 text-center">HSN</div>
-                <div className="col-span-1 text-right">Total</div>
-                <div className="col-span-1" />
-              </div>
+              <Input
+                id="initialPaymentAmount"
+                label="Initial Payment"
+                type="number"
+                min="0"
+                step="0.01"
+                value={initialPaymentAmount}
+                onChange={(event) => setInitialPaymentAmount(event.target.value)}
+              />
 
-              <div className="space-y-2">
-                {items.map((item, rowIdx) => (
-                  <div
-                    key={rowIdx}
-                    className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2.5 rounded-xl border border-slate-100 group"
-                  >
-                    {/* Col 0 ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Product Select */}
-                    <div className="col-span-4 space-y-1.5">
-                      <select
-                        ref={el => {
-                          if (!gridRefs.current[rowIdx]) gridRefs.current[rowIdx] = []
-                          gridRefs.current[rowIdx][0] = el
-                        }}
-                        value={item.productId}
-                        onChange={e => void handleProductSelect(rowIdx, e.target.value)}
-                        onKeyDown={e => handleCellKeyDown(e, rowIdx, 0)}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                        required
-                      >
-                        <option value="">Select productÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦</option>
-                        {products.map(p => (
-                          <option key={p.id} value={p.id}>{p.name} ({p.stock > 0 ? `x${p.stock}` : 'Out of stock'})</option>
-                        ))}
-                      </select>
-                      {item.productId && (products.find(p => p.id === item.productId)?.stock || 0) <= 0 && (
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
-                          <p className="font-medium">This product is out of stock.</p>
-                          {substituteSuggestions[rowIdx]?.length ? (
-                            <div className="mt-1 flex flex-wrap gap-1.5">
-                              {substituteSuggestions[rowIdx].slice(0, 4).map((suggestion) => (
-                                <button
-                                  key={suggestion.id}
-                                  type="button"
-                                  onClick={() => void handleProductSelect(rowIdx, suggestion.id)}
-                                  className="rounded-full border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
-                                >
-                                  {suggestion.name} (ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â{suggestion.stock})
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="mt-1">No in-stock substitute found for the same salt/composition.</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
+              <Select
+                id="paymentMode"
+                label="Payment Mode"
+                value={paymentMode}
+                onChange={(event) => setPaymentMode(event.target.value)}
+                options={[
+                  { value: 'CASH', label: 'Cash' },
+                  { value: 'BANK', label: 'Bank' },
+                ]}
+              />
+            </div>
 
-                    {/* Col 1 ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Price */}
-                    <div className="col-span-2">
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹</span>
-                        <input
-                          ref={el => { if (gridRefs.current[rowIdx]) gridRefs.current[rowIdx][1] = el }}
-                          type="number" min="0" step="0.01"
-                          value={item.price}
-                          onChange={e => updateItem(rowIdx, 'price', parseFloat(e.target.value) || 0)}
-                          onKeyDown={e => handleCellKeyDown(e, rowIdx, 1)}
-                          className="w-full rounded-lg border border-slate-200 bg-white pl-6 pr-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                        />
-                      </div>
-                    </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+              <Input
+                id="notes"
+                label="Internal Notes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Optional notes for this invoice"
+              />
 
-                    {/* Col 2 ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Quantity */}
-                    <div className="col-span-1">
-                      <input
-                        ref={el => { if (gridRefs.current[rowIdx]) gridRefs.current[rowIdx][2] = el }}
-                        type="number" min="1"
-                        value={item.quantity}
-                        onChange={e => updateItem(rowIdx, 'quantity', e.target.value)}
-                        onKeyDown={e => handleCellKeyDown(e, rowIdx, 2)}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                      />
-                    </div>
-
-                    {/* Col 3 ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Trade Discount % */}
-                    <div className="col-span-2">
-                      <div className="relative">
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>
-                        <input
-                          ref={el => { if (gridRefs.current[rowIdx]) gridRefs.current[rowIdx][3] = el }}
-                          type="number" min="0" max="100" step="0.1"
-                          placeholder="0"
-                          value={item.discountPct || ''}
-                          onChange={e => updateItem(rowIdx, 'discountPct', parseFloat(e.target.value) || 0)}
-                          onKeyDown={e => handleCellKeyDown(e, rowIdx, 3)}
-                          className={cn(
-                            "w-full rounded-lg border bg-white pr-7 pl-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400",
-                            item.discountPct > 0 ? "border-amber-300 bg-amber-50" : "border-slate-200"
-                          )}
-                        />
-                      </div>
-                    </div>
-
-                    {/* HSN code display */}
-                    <div className="col-span-1 text-center">
-                      <span className="text-xs text-slate-400 font-mono">
-                        {item.hsnCode || 'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â'}
-                      </span>
-                    </div>
-
-                    {/* Row total */}
-                    <div className="col-span-1 text-right">
-                      <span className="text-sm font-semibold text-slate-800">
-                        {formatCurrency(lineSubtotal(item))}
-                      </span>
-                      {item.discountPct > 0 && (
-                        <p className="text-xs text-amber-600 line-through">
-                          {formatCurrency(item.price * item.quantity)}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Remove */}
-                    <div className="col-span-1 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => removeItem(rowIdx)}
-                        disabled={items.length === 1}
-                        className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <Button type="button" variant="outline" onClick={addItem}
-                className="w-full mt-3 border-dashed border-2 bg-transparent hover:bg-slate-50 text-slate-500"
-              >
-                <Plus size={15} /> Add Row <span className="text-slate-400 text-xs ml-1">(ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ from last row)</span>
-              </Button>
-            </Card>
-
-            {/* Discount Schemes card */}
-            <Card className="p-6">
-              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Tag size={14} /> Discount Schemes
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Cash Discount */}
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Percent size={15} className="text-blue-600" />
-                    <span className="text-sm font-semibold text-blue-900">Cash Discount</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number" min="0" max="100" step="0.1"
-                      placeholder="0"
-                      value={cashDiscount || ''}
-                      onChange={e => setCashDiscount(parseFloat(e.target.value) || 0)}
-                      className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    />
-                    <span className="text-blue-600 font-semibold">%</span>
-                  </div>
-                  {cashDiscount > 0 && (
-                    <p className="text-xs text-blue-600 mt-1.5">
-                      Saves {formatCurrency(cashDiscountAmount)} on this order
-                    </p>
-                  )}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-sm border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <p className="font-medium text-slate-600">Customer State</p>
+                  <p className="mt-1 text-slate-900">{customer?.state || 'Not set'}</p>
                 </div>
+                <div className="rounded-sm border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <p className="font-medium text-slate-600">Price Level</p>
+                  <p className="mt-1 text-slate-900">{customer?.priceLevel || 'RETAIL'}</p>
+                </div>
+              </div>
+            </div>
+          </Card>
 
-                {/* Volume Scheme */}
-                <div className="bg-green-50 border border-green-100 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Tag size={15} className="text-green-600" />
-                    <span className="text-sm font-semibold text-green-900">Volume Scheme (Buy X Get Y)</span>
-                  </div>
-                  <select
-                    className="w-full rounded-lg border border-green-200 bg-white px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-green-400"
-                    onChange={e => {
-                      const pid = e.target.value
-                      if (pid && !volSchemes.find(s => s.productId === pid)) {
-                        setVolSchemes(prev => [...prev, { productId: pid, buyQty: 10, freeQty: 1 }])
-                      }
-                    }}
-                    value=""
-                  >
-                    <option value="">Add product schemeÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦</option>
-                    {products.filter(p => !volSchemes.find(s => s.productId === p.id)).map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                  {volSchemes.map((scheme, si) => {
-                    const prod = products.find(p => p.id === scheme.productId)
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50 text-left text-slate-600">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Product</th>
+                    <th className="px-3 py-3 font-semibold text-right">Qty</th>
+                    <th className="px-3 py-3 font-semibold text-right">Free</th>
+                    <th className="px-3 py-3 font-semibold text-right">Rate</th>
+                    <th className="px-3 py-3 font-semibold text-right">Disc %</th>
+                    <th className="px-3 py-3 font-semibold text-right">GST</th>
+                    <th className="px-3 py-3 font-semibold text-right">Line Total</th>
+                    <th className="px-3 py-3 font-semibold text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {items.map((item, index) => {
+                    const row = computedRows[index]
+                    const product = row.product
+
                     return (
-                      <div key={si} className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-green-800 truncate flex-1">{prod?.name}</span>
-                        <span className="text-xs text-green-700">Buy</span>
-                        <input type="number" min="1" value={scheme.buyQty}
-                          onChange={e => setVolSchemes(prev => prev.map((s, i) => i === si ? {...s, buyQty: parseInt(e.target.value)||1} : s))}
-                          className="w-12 rounded border border-green-200 px-1 py-0.5 text-xs text-center" />
-                        <span className="text-xs text-green-700">Get</span>
-                        <input type="number" min="1" value={scheme.freeQty}
-                          onChange={e => setVolSchemes(prev => prev.map((s, i) => i === si ? {...s, freeQty: parseInt(e.target.value)||1} : s))}
-                          className="w-12 rounded border border-green-200 px-1 py-0.5 text-xs text-center" />
-                        <span className="text-xs text-green-700">Free</span>
-                        <button type="button" onClick={() => setVolSchemes(prev => prev.filter((_, i) => i !== si))}
-                          className="text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
-                      </div>
+                      <tr key={`${index}-${item.productId || 'empty'}`} className="align-top">
+                        <td className="px-4 py-3 min-w-[260px]">
+                          <Select
+                            value={item.productId}
+                            onChange={(event) => updateRow(index, { productId: event.target.value })}
+                            options={productOptions}
+                            placeholder={loading ? 'Loading products...' : 'Select product'}
+                            disabled={loading || !!loadError}
+                          />
+                          {product && (
+                            <p className="mt-2 text-xs text-slate-500">
+                              HSN: {product.hsnCode || 'NA'} | Stock: {product.stock}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 w-24">
+                          <Input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(event) => updateRow(index, { quantity: event.target.value })}
+                          />
+                        </td>
+                        <td className="px-3 py-3 w-24">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={item.freeQty}
+                            onChange={(event) => updateRow(index, { freeQty: event.target.value })}
+                          />
+                        </td>
+                        <td className="px-3 py-3 w-28">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.rate}
+                            onChange={(event) => updateRow(index, { rate: event.target.value })}
+                            placeholder={product ? String(product.price) : '0'}
+                          />
+                        </td>
+                        <td className="px-3 py-3 w-24">
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value={item.discountPct}
+                            onChange={(event) => updateRow(index, { discountPct: event.target.value })}
+                          />
+                        </td>
+                        <td className="px-3 py-3 text-right font-medium text-slate-600">
+                          {product ? `${product.gstRate}%` : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-right font-semibold text-slate-900">
+                          {row.totalAmount > 0 ? formatCurrency(row.totalAmount) : '-'}
+                          {product && row.stockImpactQty > product.stock && (
+                            <p className="mt-1 text-xs font-medium text-red-600">
+                              Exceeds stock
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => removeRow(index)}
+                            className={cn(
+                              'rounded-sm p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600',
+                              items.length === 1 && 'opacity-50'
+                            )}
+                            disabled={items.length === 1}
+                            aria-label={`Remove item ${index + 1}`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
                     )
                   })}
-                </div>
-              </div>
-            </Card>
+                </tbody>
+              </table>
+            </div>
 
-          </div>
-
-          {/* ===== RIGHT / SUMMARY COLUMN ===== */}
-          <div className="lg:col-span-1">
-            <Card className="p-6 sticky top-6 space-y-4">
-              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">3</span>
-                Order Summary
-              </h3>
-
-              {/* Breakdown */}
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Subtotal</span>
-                  <span className="font-medium">{formatCurrency(subtotal)}</span>
-                </div>
-
-                {cashDiscount > 0 && (
-                  <div className="flex justify-between text-amber-600">
-                    <span>Cash Discount ({cashDiscount}%)</span>
-                    <span>- {formatCurrency(cashDiscountAmount)}</span>
-                  </div>
-                )}
-
-                {items.some(i => i.discountPct > 0) && (
-                  <div className="flex justify-between text-amber-600">
-                    <span>Trade Discounts</span>
-                    <span>- {formatCurrency(items.reduce((s, i) => s + (i.price * i.quantity * i.discountPct / 100), 0))}</span>
-                  </div>
-                )}
-
-                <div className="pt-2 border-t border-slate-100">
-                  <div className="flex justify-between text-slate-500">
-                    <span>Taxable Amount</span>
-                    <span>{formatCurrency(taxableAmount)}</span>
-                  </div>
-                </div>
-
-                {/* GST split */}
-                {sameState ? (
-                  <>
-                    <div className="flex justify-between text-slate-500 text-xs">
-                      <span>CGST ({(blendedGSTRate / 2).toFixed(1)}%)</span>
-                      <span>{formatCurrency(gstCalc.cgstAmount)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-500 text-xs">
-                      <span>SGST ({(blendedGSTRate / 2).toFixed(1)}%)</span>
-                      <span>{formatCurrency(gstCalc.sgstAmount)}</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex justify-between text-slate-500 text-xs">
-                    <span>IGST ({blendedGSTRate.toFixed(1)}%)</span>
-                    <span>{formatCurrency(gstCalc.igstAmount)}</span>
-                  </div>
-                )}
-
-                <div className="pt-3 border-t border-slate-200 flex justify-between">
-                  <span className="font-bold text-slate-900 text-base">Total</span>
-                  <span className="font-bold text-indigo-600 text-xl">{formatCurrency(totalAmount)}</span>
-                </div>
-              </div>
-
-              {/* Customer preview */}
-              <div className="p-3 bg-slate-50 rounded-xl text-xs text-slate-600 leading-relaxed border border-slate-100 space-y-1">
-                <p><span className="font-medium">Customer:</span> {selectedCustomer ? selectedCustomer.name : 'Not selected'}</p>
-                <p><span className="font-medium">Items:</span> {items.filter(i => i.productId).length}</p>
-                <p><span className="font-medium">Tax Type:</span> {sameState ? 'CGST + SGST' : 'IGST'}</p>
-              </div>
-
-              <Button
-                id="pos-submit"
-                type="submit" size="lg" className="w-full" loading={loading}
-                disabled={products.length === 0 || hasInvalidStock}
-              >
-                <Receipt size={18} className="mr-2" />
-                Generate Invoice
-                <kbd className="ml-2 text-xs opacity-60 font-mono border border-white/30 px-1 rounded">F9</kbd>
+            <div className="border-t border-slate-200 bg-slate-50 px-4 py-3">
+              <Button variant="outline" size="sm" onClick={addRow}>
+                <Plus size={14} />
+                Add another line
               </Button>
-            </Card>
-          </div>
-
+            </div>
+          </Card>
         </div>
-      </form>
+
+        <div className="space-y-6">
+          <Card className="p-5">
+            <h2 className="text-base font-semibold text-slate-900">Invoice Summary</h2>
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Gross Amount</span>
+                <span className="font-medium text-slate-900">{formatCurrency(totals.subtotal)}</span>
+              </div>
+              {totals.discountAmount > 0 && (
+                <div className="flex items-center justify-between text-amber-700">
+                  <span>Trade Discount</span>
+                  <span>- {formatCurrency(totals.discountAmount)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Taxable Amount</span>
+                <span className="font-medium text-slate-900">{formatCurrency(totals.taxableAmount)}</span>
+              </div>
+
+              {/* Cash Discount */}
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 shrink-0">Cash Disc %</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={cashDiscountPct}
+                  onChange={e => setCashDiscountPct(e.target.value)}
+                  className="w-20 rounded border border-slate-200 px-2 py-1 text-right text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                {parseNumber(cashDiscountPct) > 0 && (
+                  <span className="ml-auto font-medium text-amber-700">
+                    - {formatCurrency(totals.taxableAmount * parseNumber(cashDiscountPct) / 100)}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">CGST</span>
+                <span className="font-medium text-slate-900">{formatCurrency(totals.cgstAmount)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">SGST</span>
+                <span className="font-medium text-slate-900">{formatCurrency(totals.sgstAmount)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">IGST</span>
+                <span className="font-medium text-slate-900">{formatCurrency(totals.igstAmount)}</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base">
+                <span className="font-semibold text-slate-900">Invoice Total</span>
+                <span className="font-bold text-indigo-600">{formatCurrency(totals.totalAmount)}</span>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="text-base font-semibold text-slate-900">Posting Preview</h2>
+            <div className="mt-4 space-y-2 text-sm text-slate-600">
+              <p>Items to post: <span className="font-medium text-slate-900">{filteredRows.length}</span></p>
+              <p>Stock deduction: <span className="font-medium text-slate-900">{filteredRows.reduce((sum, row) => sum + row.stockImpactQty, 0)}</span></p>
+              <p>Initial receipt: <span className="font-medium text-slate-900">{formatCurrency(initialPaymentValue)}</span></p>
+              <p>Outstanding after post: <span className="font-medium text-slate-900">{formatCurrency(Math.max(totals.totalAmount - initialPaymentValue, 0))}</span></p>
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }
-

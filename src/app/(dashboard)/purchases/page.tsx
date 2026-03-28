@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, Search, Trash2, Truck, ScanLine, Building2, CreditCard } from 'lucide-react'
+import { Plus, Search, Trash2, Truck, Building2, CreditCard } from 'lucide-react'
 import Link from 'next/link'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
@@ -127,12 +127,6 @@ export default function PurchasesPage() {
               Suppliers
             </Button>
           </Link>
-          <Link href="/purchases/scan" className="w-full sm:w-auto">
-            <Button variant="outline" className="w-full sm:w-auto text-amber-600 border-amber-200 hover:bg-amber-50">
-              <ScanLine size={18} />
-              Scan Invoice
-            </Button>
-          </Link>
           <Link href="/purchases/new" className="w-full sm:w-auto">
             <Button className="w-full sm:w-auto">
               <Plus size={18} />
@@ -171,11 +165,6 @@ export default function PurchasesPage() {
             </p>
             {!search && (
               <div className="flex gap-3 mt-6">
-                <Link href="/purchases/scan">
-                  <Button variant="outline" className="text-amber-600 border-amber-200 hover:bg-amber-50">
-                    <ScanLine size={18} /> Scan Invoice
-                  </Button>
-                </Link>
                 <Link href="/purchases/new">
                   <Button>Manual Entry</Button>
                 </Link>
