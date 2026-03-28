@@ -63,16 +63,23 @@ export async function DELETE(
     // We'll reverse the operation we did on create
     await prisma.$transaction(async (tx) => {
       for (const item of existing.items) {
-        if (item.productName) {
+        const totalQty = item.quantity + (item.freeQty ?? 0)
+        if (totalQty <= 0) continue
+
+        if (item.productId) {
+          await tx.product.updateMany({
+            where: { shopId: shop.id, id: item.productId },
+            data: { stock: { decrement: totalQty } }
+          })
+        } else if (item.productName) {
           const product = await tx.product.findFirst({
             where: { shopId: shop.id, name: { equals: item.productName, mode: 'insensitive' } }
           })
           if (product) {
-             // Reverse the stock increment
-             await tx.product.update({
-               where: { id: product.id },
-               data: { stock: { decrement: item.quantity } }
-             })
+            await tx.product.update({
+              where: { id: product.id },
+              data: { stock: { decrement: totalQty } }
+            })
           }
         }
       }

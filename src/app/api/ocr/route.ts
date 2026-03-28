@@ -71,9 +71,34 @@ export async function POST(request: Request) {
           {
             role: 'user',
             content: [
-              { 
-                type: 'text', 
-                text: "Extract data from this invoice image and return ONLY a valid raw JSON object. Do not include markdown code block formatting like ```json. If you cannot read the image, make your best guess. The JSON MUST exactly match this TypeScript interface: { vendorName: string, totalAmount: number, items: [ { name: string, quantity: number, price: number } ] }" 
+              {
+                type: 'text',
+                text: `Extract all data from this purchase invoice/bill image and return ONLY a valid raw JSON object (no markdown, no backticks, no explanation).
+
+The JSON MUST exactly match this structure:
+{
+  "vendorName": "string (supplier/vendor/company name)",
+  "billNo": "string or null (invoice number / bill number)",
+  "totalAmount": number (final total amount payable),
+  "items": [
+    {
+      "name": "string (product/item name)",
+      "quantity": number (quantity purchased, integer),
+      "freeQty": number (free/bonus quantity, 0 if none),
+      "price": number (unit rate/price per unit),
+      "discountPct": number (discount percentage, 0 if none),
+      "batchNo": "string or null (batch number if printed)",
+      "pack": "string or null (pack size like '10x10', '1x10' if printed)"
+    }
+  ]
+}
+
+Rules:
+- Use 0 for any missing numeric fields (freeQty, discountPct)
+- Use null for missing string fields (batchNo, pack, billNo)
+- price is per unit (rate), NOT total line amount
+- totalAmount is the grand total of the bill
+- Include ALL line items you can see`
               },
               { 
                 type: 'image_url', 

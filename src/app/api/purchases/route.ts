@@ -146,29 +146,47 @@ export async function POST(request: Request) {
           imageUrl: imageUrl || null,
           items: {
             create: items.map((item: any) => ({
+              productId: item.productId || null,
               productName: item.productName || item.name || 'Unknown Item',
+              batchNo: item.batchNo?.trim() || null,
+              pack: item.pack?.trim() || null,
               quantity: parseInt(item.quantity, 10),
-              price: parseFloat(item.price)
+              freeQty: parseInt(item.freeQty || item.free || 0, 10),
+              price: parseFloat(item.price),
+              discountPct: parseFloat(item.discountPct || item.discount || 0),
+              amount: parseFloat(item.amount || 0),
             }))
           }
         },
         include: { items: true }
       })
 
-      // 2. We can try to match product names to increment stock, but since this is manual
-      // or OCR based, the product name might not exactly match what's in the DB.
-      // So we'll skip automatic stock increment for unlinked manual purchases unless linked via a proper product picker.
-      // Evolving logic: If the user provides an exact match, update stock
+      // 2. Increment stock: use productId if provided, else fall back to name match
       for (const item of items) {
-        if (item.productName) {
+        const qty = parseInt(item.quantity, 10)
+        const freeQty = parseInt(item.freeQty || item.free || 0, 10)
+        const totalQty = qty + freeQty
+        if (totalQty <= 0) continue
+
+        if (item.productId) {
+          const product = await tx.product.findFirst({
+            where: { shopId: shop.id, id: item.productId }
+          })
+          if (product) {
+            await tx.product.update({
+              where: { id: product.id },
+              data: { stock: { increment: totalQty } }
+            })
+          }
+        } else if (item.productName) {
           const product = await tx.product.findFirst({
             where: { shopId: shop.id, name: { equals: item.productName, mode: 'insensitive' } }
           })
           if (product) {
-             await tx.product.update({
-               where: { id: product.id },
-               data: { stock: { increment: parseInt(item.quantity, 10) } }
-             })
+            await tx.product.update({
+              where: { id: product.id },
+              data: { stock: { increment: totalQty } }
+            })
           }
         }
       }
