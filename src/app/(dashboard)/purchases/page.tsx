@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, Search, Trash2, Truck, Building2, CreditCard } from 'lucide-react'
+import { Plus, Search, Trash2, Truck, Building2, CreditCard, Eye } from 'lucide-react'
 import Link from 'next/link'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
@@ -130,7 +130,7 @@ export default function PurchasesPage() {
           <Link href="/purchases/new" className="w-full sm:w-auto">
             <Button className="w-full sm:w-auto">
               <Plus size={18} />
-              Manual Entry
+              Purchases Entry
             </Button>
           </Link>
         </div>
@@ -166,7 +166,7 @@ export default function PurchasesPage() {
             {!search && (
               <div className="flex gap-3 mt-6">
                 <Link href="/purchases/new">
-                  <Button>Manual Entry</Button>
+                  <Button>Purchases Entry</Button>
                 </Link>
               </div>
             )}
@@ -209,10 +209,18 @@ export default function PurchasesPage() {
                     </td>
                     <td className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <Link href={`/purchases/${purchase.id}`}>
+                          <button
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="View Details"
+                          >
+                            <Eye size={16} />
+                          </button>
+                        </Link>
                         {purchase.paymentStatus !== 'PAID' && (
                           <button
                             onClick={() => openPayment(purchase)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                             title="Record Payment"
                           >
                             <CreditCard size={16} />

@@ -130,6 +130,7 @@ model Product {
   godownStock        GodownStock[]
   purchaseOrderItems PurchaseOrderItem[]
   salesSchemes       SalesScheme[]
+  purchaseItems      PurchaseItem[]
 
   @@index([shopId])
   @@index([primarySupplierId])
@@ -252,13 +253,21 @@ model Purchase {
 model PurchaseItem {
   id           String   @id @default(uuid())
   purchaseId   String
+  productId    String?
   productName  String
+  batchNo      String?
+  pack         String?
   quantity     Int
+  freeQty      Int      @default(0)
   price        Float
+  discountPct  Float    @default(0)
+  amount       Float    @default(0)
   purchase     Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product      Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   purchaseReturnItems PurchaseReturnItem[]
 
   @@index([purchaseId])
+  @@index([productId])
 }
 
 model Account {

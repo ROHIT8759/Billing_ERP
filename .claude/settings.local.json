@@ -12,7 +12,9 @@
       "Bash(ls \"D:/Oxify Lab Prijects/Billing_System/billing-erp/src/app/\\(dashboard\\)/\")",
       "Bash(npx tsc:*)",
       "Bash(ls \"D:/Oxify Lab Prijects/Billing_System/billing-erp/src/app/\\(dashboard\\)/purchases/\")",
-      "Bash(ls \"D:/Oxify Lab Prijects/Billing_System/billing-erp/src/app/\\(dashboard\\)/purchases/new/\")"
+      "Bash(ls \"D:/Oxify Lab Prijects/Billing_System/billing-erp/src/app/\\(dashboard\\)/purchases/new/\")",
+      "Bash(npx prisma:*)",
+      "Bash(ls \"D:/Oxify Lab Prijects/Billing_System/billing-erp/src/app/\\(dashboard\\)/purchases/scan/\")"
     ]
   }
 }
