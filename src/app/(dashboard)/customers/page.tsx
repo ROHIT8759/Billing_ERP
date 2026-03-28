@@ -16,9 +16,12 @@ type Customer = {
   email: string | null
   address: string | null
   state: string | null
+  priceLevel: string
   createdAt: string
   _count: { invoices: number }
 }
+
+const PRICE_LEVELS = ['RETAIL', 'WHOLESALE', 'DISTRIBUTOR', 'MRP']
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -36,7 +39,8 @@ export default function CustomersPage() {
     phone: '',
     email: '',
     address: '',
-    state: ''
+    state: '',
+    priceLevel: 'RETAIL',
   })
 
   const fetchCustomers = async () => {
@@ -64,11 +68,12 @@ export default function CustomersPage() {
         phone: customer.phone || '',
         email: customer.email || '',
         address: customer.address || '',
-        state: customer.state || ''
+        state: customer.state || '',
+        priceLevel: customer.priceLevel || 'RETAIL',
       })
     } else {
       setEditingId(null)
-      setFormData({ name: '', phone: '', email: '', address: '', state: '' })
+      setFormData({ name: '', phone: '', email: '', address: '', state: '', priceLevel: 'RETAIL' })
     }
     setIsModalOpen(true)
   }
@@ -181,7 +186,12 @@ export default function CustomersPage() {
                   <tr key={customer.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
                     <td className="px-3 py-2 border-r border-slate-50">
                       <p className="font-semibold text-slate-900">{customer.name}</p>
-                      {customer.address && <p className="text-[10px] text-slate-500 truncate max-w-[200px] mt-0.5">{customer.address}</p>}
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                          {customer.priceLevel || 'RETAIL'}
+                        </span>
+                        {customer.address && <span className="text-[10px] text-slate-500 truncate max-w-40">{customer.address}</span>}
+                      </div>
                     </td>
                     <td className="px-3 py-2 border-r border-slate-50">
                       <div className="flex flex-col gap-0.5">
@@ -256,16 +266,28 @@ export default function CustomersPage() {
             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
             placeholder="Enter full address"
           />
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">State (for GST)</label>
-            <select
-              value={formData.state}
-              onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
-            >
-              <option value="">Select state…</option>
-              {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">State (for GST)</label>
+              <select
+                value={formData.state}
+                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+              >
+                <option value="">Select state…</option>
+                {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Price Level</label>
+              <select
+                value={formData.priceLevel}
+                onChange={(e) => setFormData({ ...formData, priceLevel: e.target.value })}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+              >
+                {PRICE_LEVELS.map(pl => <option key={pl} value={pl}>{pl}</option>)}
+              </select>
+            </div>
           </div>
           <div className="pt-4 flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} disabled={formLoading}>
