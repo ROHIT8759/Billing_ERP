@@ -14,6 +14,7 @@ import {
   LogOut,
   Store,
   Scan,
+  Tag,
   Warehouse,
   Layers,
   ClipboardList,
@@ -147,6 +148,32 @@ export function Sidebar({ shopName }: SidebarProps) {
               { href: '/inventory/write-offs', icon: AlertTriangle, label: 'Wastage / Write-Off' },
               { href: '/inventory/purchase-orders', icon: ClipboardList, label: 'Purchase Orders' },
               { href: '/inventory/barcodes', icon: Barcode, label: 'Barcodes' },
+            ].map(({ href, icon: Icon, label }) => {
+              const isActive = pathname === href || pathname.startsWith(href + '/')
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-1.5 text-[13px] font-medium transition-all duration-150',
+                    isActive
+                      ? 'border-l-4 border-slate-700 bg-slate-100 text-slate-900 rounded-r-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border-l-4 border-transparent rounded-r-sm'
+                  )}
+                >
+                  <Icon size={14} className={isActive ? "text-slate-700" : "text-slate-400"} />
+                  {label}
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="pt-2 mt-2 border-t border-slate-100">
+          <p className="px-5 mb-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pricing</p>
+          <div className="px-2 space-y-0.5">
+            {[
+              { href: '/pricing/schemes', icon: Tag, label: 'Schemes' },
             ].map(({ href, icon: Icon, label }) => {
               const isActive = pathname === href || pathname.startsWith(href + '/')
               return (
